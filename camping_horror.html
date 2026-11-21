@@ -513,6 +513,158 @@ for (let i = 0; i < (HQ ? 34 : 18); i++) {
   sp.scale.set(rand(10, 18), rand(3, 5), 1); scene.add(sp); mists.push(sp);
 }
 
+/* ================= food (detailed models with printed labels) ================= */
+const KFONT = '"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+const metalMat = new THREE.MeshStandardMaterial({ color: C(0xaeb4ba), metalness: 0.6, roughness: 0.4 });
+function labelTex(w, h, draw) { const t = canvasTex(w, h, draw); t.anisotropy = maxAniso; return t; }
+const foodTex = {
+  tuna: labelTex(512, 128, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0d4f8b'); g.addColorStop(1, '#083560');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#f4d03f'; x.fillRect(0, 10, w, 6); x.fillRect(0, h - 16, w, 6);
+    for (const ox of [0, 256]) {
+      x.fillStyle = '#fff'; x.font = `bold 46px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('참치', ox + 22, 58);
+      x.font = `bold 15px ${KFONT}`; x.fillStyle = '#f4d03f'; x.fillText('살코기 · 150g', ox + 26, 96);
+      x.fillStyle = '#e8a0a0'; x.beginPath(); x.ellipse(ox + 200, 64, 34, 16, 0, 0, 7); x.fill(); // tuna steak
+      x.fillStyle = '#c96c6c'; x.beginPath(); x.ellipse(ox + 200, 64, 20, 8, 0, 0, 7); x.fill();
+    }
+  }),
+  ramenSide: labelTex(512, 128, (x, w, h) => {
+    x.fillStyle = '#c0392b'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#fff'; x.fillRect(0, h - 22, w, 22);
+    for (const ox of [0, 256]) {
+      x.fillStyle = '#ffe9a8'; x.font = `900 52px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('라면', ox + 18, 52);
+      x.fillStyle = '#c0392b'; x.font = `bold 13px ${KFONT}`; x.fillText('매운맛 · 컵', ox + 30, h - 11);
+      x.strokeStyle = '#f6c24a'; x.lineWidth = 3;
+      for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(ox + 150, 30 + i * 9); x.bezierCurveTo(ox + 180, 20 + i * 9, ox + 200, 45 + i * 9, ox + 235, 30 + i * 9); x.stroke(); } // noodles
+      x.fillStyle = '#e74c3c'; x.beginPath(); x.arc(ox + 225, 25, 8, 0, 7); x.fill();
+    }
+  }),
+  ramenLid: labelTex(128, 128, (x, w, h) => {
+    const g = x.createRadialGradient(64, 64, 10, 64, 64, 64); g.addColorStop(0, '#eceff1'); g.addColorStop(1, '#9ea7ad');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#c0392b'; x.font = `900 34px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('라면', 64, 60);
+    x.font = `bold 11px ${KFONT}`; x.fillText('여기를 뜯으세요 ▸', 64, 92);
+  }),
+  chips: labelTex(256, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#f7c600'); g.addColorStop(1, '#e09b00');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#d62f2f'; x.beginPath(); x.ellipse(128, 105, 105, 48, -0.12, 0, 7); x.fill();
+    x.fillStyle = '#fff'; x.font = `900 54px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('감자칩', 128, 104);
+    for (let i = 0; i < 7; i++) { // chips
+      x.save(); x.translate(60 + (i % 4) * 45 + (i > 3 ? 22 : 0), 200 + (i > 3 ? 45 : 0)); x.rotate(rand(-0.6, 0.6));
+      x.fillStyle = '#f9e08a'; x.beginPath(); x.ellipse(0, 0, 26, 18, 0, 0, 7); x.fill();
+      x.fillStyle = 'rgba(190,130,40,.5)'; for (let k = 0; k < 4; k++) { x.beginPath(); x.arc(rand(-14, 14), rand(-8, 8), 2.5, 0, 7); x.fill(); }
+      x.restore();
+    }
+    x.fillStyle = '#7a3b00'; x.font = `bold 16px ${KFONT}`; x.fillText('오리지널 · 60g', 128, 292);
+  }),
+  water: labelTex(256, 64, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1e88e5'); g.addColorStop(1, '#1565c0');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 2; x.beginPath();
+    for (let i = 0; i <= w; i += 8) x.lineTo(i, 48 + Math.sin(i / 14) * 4); x.stroke();
+    for (const ox of [0, 128]) { x.fillStyle = '#fff'; x.font = `900 26px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('생수', ox + 16, 26); x.font = `10px ${KFONT}`; x.fillText('500mL', ox + 80, 28); }
+  }),
+  choco: labelTex(256, 96, (x, w, h) => {
+    x.fillStyle = '#4a2511'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#b8862b'; x.fillRect(0, 0, 26, h); x.fillRect(w - 26, 0, 26, h);
+    x.fillStyle = '#c0392b'; x.fillRect(40, 18, 176, 60);
+    x.fillStyle = '#ffe7c2'; x.font = `900 36px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('초콜릿', 128, 50);
+  }),
+  box: labelTex(256, 256, (x, w, h) => {
+    x.fillStyle = '#b08354'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(${rand(80, 140)},${rand(55, 95)},30,${rand(0.05, 0.15)})`; x.fillRect(rand(0, w), rand(0, h), rand(1, 3), rand(1, 3)); }
+    x.fillStyle = 'rgba(200,190,170,.85)'; x.fillRect(0, 0, w, 26); // packing tape
+    x.strokeStyle = 'rgba(30,20,10,.75)'; x.lineWidth = 4; x.strokeRect(46, 82, 164, 96);
+    x.fillStyle = 'rgba(30,20,10,.8)'; x.font = `900 38px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('비상식량', 128, 118);
+    x.font = `bold 15px ${KFONT}`; x.fillText('100개입 · 이쪽이 위 ↑', 128, 158);
+  }),
+};
+const ringGeo = new THREE.TorusGeometry(0.047, 0.004, 6, 24);
+const FOOD_TYPES = {
+  tuna: { name: '참치캔', sound: 'can', make() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.047, 0.047, 0.045, 28, 1, true), new THREE.MeshStandardMaterial({ map: foodTex.tuna, metalness: 0.3, roughness: 0.45, side: THREE.DoubleSide }));
+    body.position.y = 0.0245; g.add(body);
+    for (const y of [0.002, 0.047]) { const r = new THREE.Mesh(ringGeo, metalMat); r.rotation.x = Math.PI / 2; r.position.y = y; g.add(r); }
+    const lid = new THREE.Mesh(new THREE.CircleGeometry(0.046, 28), metalMat); lid.rotation.x = -Math.PI / 2; lid.position.y = 0.046; g.add(lid);
+    const score = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.0015, 4, 24), metalMat); score.rotation.x = Math.PI / 2; score.position.y = 0.047; g.add(score);
+    const tab = new THREE.Mesh(new THREE.TorusGeometry(0.011, 0.003, 6, 14), metalMat); tab.rotation.x = Math.PI / 2; tab.position.set(0.02, 0.049, 0); g.add(tab);
+    return g;
+  } },
+  ramen: { name: '컵라면', sound: 'slurp', make() {
+    const g = new THREE.Group();
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.044, 0.1, 28), [
+      new THREE.MeshStandardMaterial({ map: foodTex.ramenSide, roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: foodTex.ramenLid, metalness: 0.25, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: C(0xf2f2f2), roughness: 0.7 })]);
+    cup.position.y = 0.05; g.add(cup);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.004, 6, 28), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.5 }));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.1; g.add(rim);
+    const flap = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.025), new THREE.MeshStandardMaterial({ map: foodTex.ramenLid, metalness: 0.25, roughness: 0.5, side: THREE.DoubleSide }));
+    flap.position.set(0.062, 0.104, 0); flap.rotation.set(-Math.PI / 2, 0, 0.3); g.add(flap);
+    return g;
+  } },
+  chips: { name: '감자칩', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const geo = new THREE.BoxGeometry(0.15, 0.2, 0.05, 10, 12, 3), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { // puff the bag: full in the middle, flat at the sealed ends
+      const x = p.getX(i) / 0.075, y = p.getY(i) / 0.1;
+      const puff = (1 - Math.pow(Math.abs(y), 6)) * (1 - Math.pow(Math.abs(x), 4) * 0.5);
+      p.setZ(i, p.getZ(i) * Math.max(0.08, puff) * 1.5);
+      p.setX(i, p.getX(i) * (1 - 0.1 * (1 - Math.abs(y)) * Math.abs(x)));
+    }
+    geo.computeVertexNormals();
+    const foilMat = new THREE.MeshStandardMaterial({ map: foodTex.chips, metalness: 0.35, roughness: 0.32 });
+    const bag = new THREE.Mesh(geo, foilMat); g.add(bag);
+    const sealMat = new THREE.MeshStandardMaterial({ color: C(0xd8a300), metalness: 0.4, roughness: 0.4 });
+    for (const y of [-0.105, 0.105]) { // crimped seals
+      for (let k = 0; k < 10; k++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.0145, 0.018, 0.004), sealMat); t.position.set(-0.068 + k * 0.0152, y, 0); t.rotation.x = k % 2 ? 0.25 : -0.25; g.add(t); }
+    }
+    g.rotation.x = -Math.PI / 2 + 0.06; g.position.y = 0.035;
+    const wrap = new THREE.Group(); wrap.add(g); return wrap;
+  } },
+  water: { name: '생수', sound: 'gulp', make() {
+    const g = new THREE.Group();
+    const plastic = new THREE.MeshStandardMaterial({ color: C(0xbfe3ff), transparent: true, opacity: 0.38, roughness: 0.05, metalness: 0.1, depthWrite: false });
+    const waterMat = new THREE.MeshStandardMaterial({ color: C(0x7fc4ff), transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.15, 20), plastic); body.position.y = 0.075; g.add(body);
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.029, 0.029, 0.12, 20), waterMat); water.position.y = 0.062; g.add(water);
+    for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.002, 4, 20), plastic); r.rotation.x = Math.PI / 2; r.position.y = 0.025 + i * 0.012; g.add(r); }
+    const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.032, 0.04, 20), plastic); shoulder.position.y = 0.17; g.add(shoulder);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0335, 0.0335, 0.045, 24, 1, true), new THREE.MeshStandardMaterial({ map: foodTex.water, roughness: 0.5 }));
+    label.position.y = 0.1; g.add(label);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.018, 16), new THREE.MeshStandardMaterial({ color: C(0x1565c0), roughness: 0.4 }));
+    cap.position.y = 0.199; g.add(cap);
+    return g;
+  } },
+  choco: { name: '초콜릿', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.016, 0.06), [
+      new THREE.MeshStandardMaterial({ color: C(0xb8862b), metalness: 0.7, roughness: 0.3 }), new THREE.MeshStandardMaterial({ color: C(0xb8862b), metalness: 0.7, roughness: 0.3 }),
+      new THREE.MeshStandardMaterial({ map: foodTex.choco, roughness: 0.45 }), new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 }), new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 })]);
+    bar.position.y = 0.008; g.add(bar);
+    return g;
+  } },
+  apple: { name: '사과', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const geo = new THREE.SphereGeometry(0.042, 20, 16), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y > 0.03) p.setY(i, y - (y - 0.03) * 0.9); if (y < -0.035) p.setY(i, y * 0.9); }
+    geo.computeVertexNormals();
+    const apple = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: C(0xb3141c), roughness: 0.35 }));
+    apple.position.y = 0.04; g.add(apple);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.003, 0.025, 5), new THREE.MeshStandardMaterial({ color: C(0x5a3a1a) }));
+    stem.position.y = 0.08; stem.rotation.z = 0.25; g.add(stem);
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshStandardMaterial({ color: C(0x3f8f2f), roughness: 0.6 }));
+    leaf.scale.set(1.6, 0.25, 0.8); leaf.position.set(0.012, 0.085, 0); leaf.rotation.z = -0.4; g.add(leaf);
+    return g;
+  } },
+};
+const FOOD_LAYOUT = ['tuna', 'ramen', 'chips', 'water', 'choco', 'apple', 'tuna', 'ramen', 'chips', 'water'];
+const BOX_TYPES = ['tuna', 'ramen', 'chips', 'water', 'choco', 'apple'];
+
 /* ================= camp: tent & props ================= */
 const TENT = { x: 0, z: -6 };
 let tentGroup = null;
@@ -541,29 +693,32 @@ const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
   const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.18, 10), new THREE.MeshStandardMaterial({ color: C(0xffc070), emissive: C(0xffa040), emissiveIntensity: 2 }));
   lamp.position.set(0.7, 0.1, -0.6); tent.add(lamp);
   lantern.position.set(0.7, 0.45, -0.6); tent.add(lantern);
-  const canGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.11, 14), bagGeo = new THREE.BoxGeometry(0.13, 0.05, 0.17);
-  const lidMat = new THREE.MeshStandardMaterial({ color: 0xcfd3d6, metalness: 0.8, roughness: 0.3 });
-  const foodCols = [0xc0392b, 0x2e86c1, 0xf1c40f, 0x27ae60, 0xe67e22];
   for (let i = 0; i < FOOD_SHOWN; i++) {
-    const col = i % 2, row = Math.floor(i / 2), g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: C(foodCols[row]), roughness: 0.5 });
-    if ((row + col) % 2 === 0) {
-      const can = new THREE.Mesh(canGeo, mat); can.position.y = 0.055; g.add(can);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.01, 14), lidMat); lid.position.y = 0.115; g.add(lid);
-    } else {
-      const bag = new THREE.Mesh(bagGeo, mat); bag.position.y = 0.03; bag.rotation.y = rand(-0.3, 0.3); g.add(bag);
-    }
-    g.position.set(0.55 + col * 0.2, 0.02, 0.05 + row * 0.18);
+    const col = i % 2, row = Math.floor(i / 2), type = FOOD_LAYOUT[i];
+    const g = FOOD_TYPES[type].make();
+    g.userData.type = type;
+    g.position.set(0.55 + col * 0.21 + rand(-0.02, 0.02), 0.02, 0.05 + row * 0.18);
+    g.rotation.y = rand(-0.6, 0.6);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     tent.add(g); foodMeshes.push(g);
   }
+  // cardboard supply box holding the other 100
   foodBox = new THREE.Group();
-  const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.32), new THREE.MeshStandardMaterial({ color: C(0xa57a4a), roughness: 0.95 }));
-  box.position.y = 0.15; foodBox.add(box);
-  for (let i = 0; i < 6; i++) { // cans peeking out of the top
-    const c = new THREE.Mesh(canGeo, new THREE.MeshStandardMaterial({ color: C(foodCols[i % 5]), roughness: 0.5 }));
-    c.position.set(-0.13 + (i % 3) * 0.13, 0.31, -0.07 + Math.floor(i / 3) * 0.14); foodBox.add(c);
+  const cardboard = new THREE.MeshStandardMaterial({ map: foodTex.box, roughness: 0.95 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.32), [cardboard, cardboard, new THREE.MeshStandardMaterial({ color: C(0x2a1d10), roughness: 1 }), cardboard, cardboard, cardboard]);
+  box.position.y = 0.14; foodBox.add(box);
+  for (const [fx, rot] of [[-1, 0.9], [1, -0.9]]) { // open flaps
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.004, 0.32), cardboard);
+    flap.geometry.translate(fx * 0.105, 0, 0); flap.position.set(fx * 0.21, 0.28, 0); flap.rotation.z = rot; foodBox.add(flap);
+  }
+  const peek = [['tuna', -0.12, -0.08], ['ramen', 0.0, -0.07], ['water', 0.13, -0.07], ['ramen', -0.11, 0.07], ['tuna', 0.02, 0.08], ['chips', 0.12, 0.07]];
+  for (const [type, x, z] of peek) {
+    const m = FOOD_TYPES[type].make(); m.position.set(x, type === 'water' ? 0.13 : 0.24, z); m.rotation.y = rand(0, 6);
+    if (type === 'chips') { m.rotation.set(0.5, 0, 0.3); m.position.y = 0.22; }
+    foodBox.add(m);
   }
   foodBox.position.set(0.75, 0.02, 1.0); foodBox.rotation.y = 0.2;
+  foodBox.traverse(o => { if (o.isMesh) o.castShadow = true; });
   tent.add(foodBox);
   // stakes & guy lines
   const lineMat = new THREE.LineBasicMaterial({ color: 0xd0c8b0 });
@@ -678,7 +833,7 @@ const beam = (() => {
   mesh.position.z = -0.16; mesh.rotation.x = -0.03; flashModel.add(mesh); return mesh;
 })();
 const leftHand = makeHand(-1);
-const LH_BASE = new THREE.Vector3(-0.26, -0.3, -0.42), LH_HIDE = new THREE.Vector3(-0.3, -0.8, -0.3), LH_MOUTH = new THREE.Vector3(-0.02, -0.17, -0.2);
+const LH_BASE = new THREE.Vector3(-0.26, -0.3, -0.42), LH_HIDE = new THREE.Vector3(-0.3, -0.8, -0.3), LH_MOUTH = new THREE.Vector3(-0.09, -0.19, -0.33);
 leftHand.position.copy(LH_HIDE); vm.add(leftHand);
 const bundle = new THREE.Group();
 {
@@ -693,7 +848,7 @@ const bundle = new THREE.Group();
   bundle.scale.setScalar(0.7); bundle.position.set(0.01, -0.01, 0.02);
   leftHand.add(bundle);
 }
-const VM = { swayX: 0, swayY: 0, lastYaw: 0, lastPitch: 0, pickT: 0, flashT: 0 };
+const VM = { swayX: 0, swayY: 0, lastYaw: 0, lastPitch: 0, pickT: 0, flashT: 0, eatT: 0, eatMesh: null };
 
 /* ================= monster ================= */
 // Gaunt, pale, hunched thing: backward-bending legs, arms that drag on the ground,
@@ -1173,14 +1328,28 @@ function updateGlimpse(dt) {
 function eat() {
   if (!started || dead || won) return;
   if (!P.inTent) { msg('음식은 텐트 안에 있다.', 2); return; }
+  if (VM.eatT > 0) return;
   if (food <= 0) { msg('음식이 다 떨어졌다...', 2.5); return; }
   if (hunger > 92) { msg('아직 배고프지 않다.', 2); return; }
+  // take from the supply box first, then the items laid out on the floor
+  const type = food > FOOD_SHOWN ? BOX_TYPES[Math.floor(Math.random() * BOX_TYPES.length)] : foodMeshes[food - 1].userData.type;
   food--;
   foodMeshes.forEach((m, i) => { m.visible = i < food; });
   foodBox.visible = food > FOOD_SHOWN;
   hunger = Math.min(100, hunger + 30); hungerWarn = 0;
-  for (let i = 0; i < 5; i++) noiseBurst(0.07, rand(1800, 3200), 1.5, 0.18, 'bandpass', i * 0.13);
-  msg(`음식을 먹었다. (남은 음식 ${food}/${FOOD_MAX})`, 2.5);
+  // lift it to your mouth
+  if (VM.eatMesh) leftHand.remove(VM.eatMesh);
+  const held = FOOD_TYPES[type].make();
+  held.scale.setScalar(1.1); held.position.set(0.01, 0.035, -0.05); held.rotation.set(0.7, 0.4, 0);
+  leftHand.add(held); VM.eatMesh = held; VM.eatT = 1.6;
+  eatSound(FOOD_TYPES[type].sound);
+  msg(`${FOOD_TYPES[type].name}을(를) 먹었다. (남은 음식 ${food}/${FOOD_MAX})`, 2.5);
+}
+function eatSound(kind) {
+  if (kind === 'can') { noiseBurst(0.05, 3000, 2, 0.3, 'bandpass'); noiseBurst(0.25, 1800, 1, 0.15, 'highpass', 0.06, 900); }
+  if (kind === 'can' || kind === 'crunch') for (let i = 0; i < 7; i++) noiseBurst(0.06, rand(1800, 3600), 1.5, 0.2, 'bandpass', 0.35 + i * 0.14);
+  if (kind === 'slurp') for (let i = 0; i < 3; i++) noiseBurst(0.35, 600, 2, 0.2, 'bandpass', 0.2 + i * 0.4, 2200);
+  if (kind === 'gulp') { tone(300, 0.05, 0.03, 'sine'); for (let i = 0; i < 4; i++) tone(180, 0.12, 0.18, 'sine', 90, 0.3 + i * 0.25); }
 }
 function updateHunger(dt) {
   hunger = Math.max(0, hunger - dt * 0.55);
@@ -1352,11 +1521,14 @@ function updateViewModel(dt) {
   rightHand.rotation.set(0.06 + sprintTilt * 0.3 + VM.swayY, 0.05 + VM.swayX * 2, sprintTilt * -0.2);
   // left hand: only shown while holding sticks
   let target = LH_HIDE;
-  if (P.sticks > 0 || VM.pickT > 0) target = LH_BASE;
+  if (VM.eatT > 0) target = LH_MOUTH;
+  else if (P.sticks > 0 || VM.pickT > 0) target = LH_BASE;
+  VM.eatT = Math.max(0, VM.eatT - dt);
+  if (VM.eatT <= 0 && VM.eatMesh) { leftHand.remove(VM.eatMesh); VM.eatMesh = null; }
   leftHand.position.lerp(target, dt * 9);
   leftHand.position.x += VM.swayX - bx; leftHand.position.y += VM.swayY * 0.5;
   const toMouth = target === LH_MOUTH;
-  leftHand.rotation.set(toMouth ? 0.9 : 0.1 - VM.pickT * 1.2, toMouth ? 0.4 : -0.1, toMouth ? 1.3 : 0.1);
+  leftHand.rotation.set(toMouth ? 0.45 : 0.1 - VM.pickT * 1.2, toMouth ? 0.35 : -0.1, toMouth ? 0.35 : 0.1);
   bundle.visible = P.sticks > 0 && !toMouth;
   bundle.children.forEach((c, i) => { c.visible = i < P.sticks; });
   // flashlight
