@@ -256,6 +256,8 @@ function speedOf(e){const T=teamOf(e);const base=(e.isPlayer?1:DIFF[diff].spd)*2
 const batRange=e=>56+10*teamOf(e).up.bat;
 const stunTime=e=>1.3+.3*teamOf(e).up.bat;
 const lockDur=T=>6+2*T.up.gate;
+const isFort=T=>T.id===0&&G&&!G.attract;
+const closed=T=>T.lockT>0||isFort(T);
 
 /* ---------- 행동 ---------- */
 function swing(e){
@@ -342,7 +344,7 @@ function pushRect(e,r){
 function collide(e,team){
   for(const T of G.teams){
     for(const w of T.base.walls)pushRect(e,w);
-    if(T.lockT>0&&team!==T.id)for(const g of T.base.gates)pushRect(e,g);
+    if(closed(T)&&team!==T.id)for(const g of T.base.gates)pushRect(e,g);
   }
   for(const o of OBST){const d=dist(e,o),m=e.r+o.r;if(d<m&&d>0){e.x=o.x+(e.x-o.x)/d*m;e.y=o.y+(e.y-o.y)/d*m;}}
   e.x=clamp(e.x,e.r,W-e.r);e.y=clamp(e.y,e.r,H-e.r);
@@ -355,12 +357,12 @@ function nav(e,tx,ty){
   if(a>=0){
     const B=G.teams[a];
     let g=B.base.gates.reduce((p,q)=>Math.hypot(q.outer.x-tx,q.outer.y-ty)<Math.hypot(p.outer.x-tx,p.outer.y-ty)?q:p);
-    if(B.lockT>0&&e.team!==a)return{x:g.inner.x,y:g.inner.y};
+    if(closed(B)&&e.team!==a)return{x:g.inner.x,y:g.inner.y};
     const lat=g.hor?Math.abs(e.x-g.cx):Math.abs(e.y-g.cy);
     return lat<16?{x:g.outer.x,y:g.outer.y}:{x:g.inner.x,y:g.inner.y};
   }
   const B=G.teams[b];
-  if(B.lockT>0&&e.team!==b)return null;
+  if(closed(B)&&e.team!==b)return null;
   let g=B.base.gates.reduce((p,q)=>Math.hypot(q.outer.x-e.x,q.outer.y-e.y)<Math.hypot(p.outer.x-e.x,p.outer.y-e.y)?q:p);
   const lat=g.hor?Math.abs(e.x-g.cx):Math.abs(e.y-g.cy);
   const near=Math.hypot(g.cx-e.x,g.cy-e.y)<80;
@@ -386,7 +388,7 @@ function aiThink(e){
   for(const egg of G.eggs){
     if(egg.state==='ground'){const d=dist(e,egg);consider(egg.type.rate*8/(d/150+1)+4,{type:'egg',egg},egg);}
     else if(egg.state==='slot'&&egg.team!==e.team){
-      const OT=G.teams[egg.team];if(OT.lockT>0&&!inRect(e,OT.base))continue;
+      const OT=G.teams[egg.team];if(isFort(OT)||(OT.lockT>0&&!inRect(e,OT.base)))continue;
       const d=dist(e,egg);let s=egg.type.rate*8/(d/150+1)*D.steal;if(egg.team===0)s*=D.hate;consider(s,{type:'egg',egg},egg);
     }
   }
@@ -403,6 +405,7 @@ function aiUpdate(e,dt){
     if(g.type==='egg'){
       const egg=g.egg;
       if(egg.state==='carried'||!G.eggs.includes(egg)||(egg.state==='slot'&&egg.team===e.team))e.ai.goal=null;
+      else if(egg.state==='slot'&&isFort(G.teams[egg.team]))e.ai.goal=null;
       else if(egg.state==='slot'&&G.teams[egg.team].lockT>0&&!inRect(e,G.teams[egg.team].base))e.ai.goal=null;
       else{tx=egg.x;ty=egg.y;}
     }else if(g.type==='chase'){
@@ -571,7 +574,7 @@ function update(dt){
     }
     if(got){pickUp(e,got);continue;}
     const bi=baseAt(e.x,e.y);
-    if(bi>=0&&bi!==e.team){
+    if(bi>=0&&bi!==e.team&&!isFort(G.teams[bi])){
       const V=G.teams[bi];let ne=null,nd=34;
       for(let k=0;k<V.slotsN;k++){const s=V.slots[k];if(s){const dd=dist(e,s);if(dd<nd){nd=dd;ne=s;}}}
       if(ne){if(e.grabEgg!==ne){e.grabEgg=ne;e.grabT=0;}e.grabT+=dt;if(e.grabT>=.5){e.grabT=0;e.grabEgg=null;steal(e,ne);}}
@@ -775,13 +778,13 @@ function render(){
       if(i<T.slotsN){ctx.fillStyle='#9c7434';ctx.beginPath();ctx.ellipse(p.x,p.y+6,19,10,0,0,TAU);ctx.fill();ctx.fillStyle='#d9b26a';ctx.beginPath();ctx.ellipse(p.x,p.y+4,14,6,0,0,TAU);ctx.fill();}
       else{ctx.strokeStyle='rgba(90,60,30,.35)';ctx.setLineDash([4,4]);ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(p.x,p.y+5,17,9,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
     }
-    if(T.lockT>0){
-      const blink=T.lockT<2&&Math.floor(now*8)%2;
+    if(closed(T)){
+      const fort=isFort(T),blink=!fort&&T.lockT<2&&Math.floor(now*8)%2;
       for(const g of T.base.gates){
         ctx.fillStyle=blink?'#c48a4a':'#8b5a2b';ctx.strokeStyle='#4a2c10';ctx.lineWidth=3;rr(ctx,g.x,g.y,g.w,g.h,3);ctx.fill();ctx.stroke();
         ctx.fillStyle=T.col;if(g.hor)ctx.fillRect(g.x,g.y+g.h/2-3,g.w,6);else ctx.fillRect(g.x+g.w/2-3,g.y,6,g.h);
         ctx.fillStyle='#ffd23f';ctx.strokeStyle='#4a2c10';ctx.beginPath();ctx.arc(g.cx,g.cy,11,0,TAU);ctx.fill();ctx.stroke();
-        ctx.fillStyle='#4a2c10';ctx.font='13px Jua, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(Math.ceil(T.lockT),g.cx,g.cy+1);
+        ctx.fillStyle='#4a2c10';ctx.font='13px Jua, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(fort?'🛡':Math.ceil(T.lockT),g.cx,g.cy+1);
       }
     }
     if(T.id===0&&G.alertT>0&&!G.attract&&Math.floor(now*6)%2){ctx.strokeStyle='rgba(215,38,61,.85)';ctx.lineWidth=8;ctx.strokeRect(T.base.x+4,T.base.y+4,T.base.w-8,T.base.h-8);}
@@ -832,7 +835,7 @@ function renderMini(){
   const k=mini.width/W;mc.setTransform(k,0,0,k,0,0);
   mc.fillStyle='#9ccc65';mc.fillRect(0,0,W,H);
   mc.fillStyle='#e6cf98';mc.beginPath();mc.ellipse(CX,CY,220,180,0,0,TAU);mc.fill();
-  for(const T of G.teams){mc.fillStyle=T.lt;mc.fillRect(T.base.x,T.base.y,T.base.w,T.base.h);mc.strokeStyle=T.lockT>0?'#2b1d12':T.col;mc.lineWidth=T.lockT>0?30:16;mc.strokeRect(T.base.x,T.base.y,T.base.w,T.base.h);}
+  for(const T of G.teams){mc.fillStyle=T.lt;mc.fillRect(T.base.x,T.base.y,T.base.w,T.base.h);mc.strokeStyle=closed(T)?'#2b1d12':T.col;mc.lineWidth=closed(T)?30:16;mc.strokeRect(T.base.x,T.base.y,T.base.w,T.base.h);}
   for(const e of G.eggs){if(e.state==='carried')continue;mc.fillStyle=e.type.rate>=25?'#ffb300':e.type.rate>=10?'#2e7d32':'#fff';mc.beginPath();mc.arc(e.x,e.y,e.type.rate>=10?26:16,0,TAU);mc.fill();}
   mc.fillStyle='#fff';mc.beginPath();mc.arc(G.dog.x,G.dog.y,26,0,TAU);mc.fill();mc.strokeStyle='#2b1d12';mc.lineWidth=8;mc.stroke();
   for(const e of G.ents){const T=teamOf(e);mc.fillStyle=T.col;mc.beginPath();mc.arc(e.x,e.y,e.isPlayer?48:36,0,TAU);mc.fill();mc.strokeStyle=e.isPlayer?'#ffe14d':'#fff';mc.lineWidth=e.isPlayer?16:8;mc.stroke();}
@@ -877,9 +880,9 @@ function start(){
   ensureAudio();
   const d=document.querySelector('.pill[aria-pressed="true"]').dataset.d;
   newGame(d,false);
-  $('titleScr').hidden=true;$('endScr').hidden=true;$('btns').hidden=false;
+  $('titleScr').hidden=true;$('endScr').hidden=true;$('btns').hidden=false;$('bLock').hidden=true;
   for(const id of ['hudTL','hudTC','hudTR'])$(id).hidden=false;
-  toast('🐉 선물로 용의 알을 받았다! 도둑들한테서 지켜라!','gold');
+  toast('🐉 용의 알 선물 + 🛡 우리 집은 무적 기지! 아무도 못 들어와!','gold');
 }
 $('startBtn').addEventListener('click',start);
 $('againBtn').addEventListener('click',start);
