@@ -229,6 +229,7 @@ function newGame(d,attract){
     const b=T.base;
     G.ents.push({id:i,team:i,x:b.icx,y:b.icy+20,r:20,vx:0,vy:0,faceX:i%2?-1:1,fy:0,carrying:null,stun:0,inv:0,swing:0,cd:0,grabT:0,grabEgg:null,isPlayer:i===0&&!attract,ai:{think:rnd(0,.5),goal:null,lx:b.icx,ly:b.icy,stuckT:0,jit:0,jx:0,jy:0}});
     for(let k=0;k<2;k++){const e=mkEgg(0,0,0);placeEgg(T,e,k);}
+    if(i===0&&!attract)placeEgg(T,mkEgg(5,0,0),2);
   });
   G.dog={x:CX,y:CY+200,r:22,vx:0,vy:0,face:1,stun:0,cd:0,tx:CX,ty:CY,chasing:null};
   G.player=G.ents[0];
@@ -878,7 +879,7 @@ function start(){
   newGame(d,false);
   $('titleScr').hidden=true;$('endScr').hidden=true;$('btns').hidden=false;
   for(const id of ['hudTL','hudTC','hudTR'])$(id).hidden=false;
-  toast('알을 모아 우리 집으로! 출동!','good');
+  toast('🐉 선물로 용의 알을 받았다! 도둑들한테서 지켜라!','gold');
 }
 $('startBtn').addEventListener('click',start);
 $('againBtn').addEventListener('click',start);
