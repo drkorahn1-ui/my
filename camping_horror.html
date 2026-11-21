@@ -59,6 +59,9 @@
   #tB { right:112px; bottom:40px; }
   #tR { right:24px; bottom:24px; }
   #tF { right:112px; bottom:40px; }
+  #tQ { right:112px; bottom:124px; display:none; }
+  #tQ.show { display:flex; }
+  #hgBar { background:#e0b44a !important; }
 </style>
 </head>
 <body>
@@ -66,6 +69,7 @@
   <div id="clock">1일차 · 13:00</div>
   <div id="phase">낮</div>
   <div class="bar"><span>체력</span><div><i id="staBar"></i></div></div>
+  <div class="bar"><span>배고픔</span><div><i id="hgBar"></i></div></div>
   <div id="info"></div>
 </div>
 <div id="cross"></div>
@@ -82,6 +86,7 @@
   <div class="tbtn" id="tE">행동</div>
   <div class="tbtn" id="tR">달리기</div>
   <div class="tbtn" id="tF">손전등</div>
+  <div class="tbtn" id="tQ">먹기</div>
 </div>
 
 <div id="intro" class="screen">
@@ -92,10 +97,12 @@
     <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
     낮에는 숲을 둘러봐도 좋다. 모닥불은 꺼지지 않는다.<br>
     밤이 되면 <b>그것</b>이 나온다. 하지만 <b>텐트 안에서는 절대 잡히지 않는다.</b><br>
+    텐트에는 <b>음식이 10개</b> 있다. 배가 고프면 텐트 안에서 먹어라.<br>
     <b>세 번의 밤</b>을 버티면 구조대가 온다.
   </div>
   <div class="ctrl" id="ctrlText">
     WASD 이동 · 마우스 시점 · Shift 달리기 · E 텐트 들어가기/나가기<br>
+    Q 음식 먹기(텐트 안) · 
     F 손전등 · 헤드폰 권장 🎧
   </div>
   <button class="btn" id="startBtn">캠핑 시작</button>
@@ -134,7 +141,7 @@ const smoothstep = (a, b, x) => smooth01((x - a) / (b - a));
 const C = hex => new THREE.Color(hex).convertSRGBToLinear();
 
 if (isTouch) {
-  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · 헤드폰 권장 🎧';
+  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · 먹기 버튼(텐트 안) · 헤드폰 권장 🎧';
 }
 
 /* ================= renderer ================= */
@@ -508,6 +515,8 @@ for (let i = 0; i < (HQ ? 34 : 18); i++) {
 
 /* ================= camp: tent & props ================= */
 const TENT = { x: 0, z: -6 };
+const FOOD_MAX = 10, foodMeshes = [];
+let food = FOOD_MAX, hunger = 100, hungerWarn = 0;
 const tentMat = new THREE.MeshStandardMaterial({ map: fabricTex, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthWrite: false, roughness: 0.9 });
 const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
 {
@@ -530,6 +539,21 @@ const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
   const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.18, 10), new THREE.MeshStandardMaterial({ color: C(0xffc070), emissive: C(0xffa040), emissiveIntensity: 2 }));
   lamp.position.set(0.7, 0.1, -0.6); tent.add(lamp);
   lantern.position.set(0.7, 0.45, -0.6); tent.add(lantern);
+  const canGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.11, 14), bagGeo = new THREE.BoxGeometry(0.13, 0.05, 0.17);
+  const lidMat = new THREE.MeshStandardMaterial({ color: 0xcfd3d6, metalness: 0.8, roughness: 0.3 });
+  const foodCols = [0xc0392b, 0x2e86c1, 0xf1c40f, 0x27ae60, 0xe67e22];
+  for (let i = 0; i < FOOD_MAX; i++) {
+    const col = i % 2, row = Math.floor(i / 2), g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: C(foodCols[row]), roughness: 0.5 });
+    if ((row + col) % 2 === 0) {
+      const can = new THREE.Mesh(canGeo, mat); can.position.y = 0.055; g.add(can);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.01, 14), lidMat); lid.position.y = 0.115; g.add(lid);
+    } else {
+      const bag = new THREE.Mesh(bagGeo, mat); bag.position.y = 0.03; bag.rotation.y = rand(-0.3, 0.3); g.add(bag);
+    }
+    g.position.set(0.55 + col * 0.2, 0.02, 0.05 + row * 0.18);
+    tent.add(g); foodMeshes.push(g);
+  }
   // stakes & guy lines
   const lineMat = new THREE.LineBasicMaterial({ color: 0xd0c8b0 });
   for (const [cx, cz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
@@ -785,6 +809,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'KeyE' && !e.repeat) interact();
   if (e.code === 'KeyF' && !e.repeat) toggleFlash();
+  if (e.code === 'KeyQ' && !e.repeat) eat();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 document.addEventListener('pointerlockchange', () => {
@@ -808,7 +833,7 @@ if (isTouch) {
     el.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('act'); up && up(); }, { passive: false });
     el.addEventListener('touchcancel', () => { el.classList.remove('act'); up && up(); });
   };
-  btn('tE', interact); btn('tF', toggleFlash);
+  btn('tE', interact); btn('tF', toggleFlash); btn('tQ', eat);
   btn('tR', () => touchRun = true, () => touchRun = false);
   addEventListener('touchstart', e => {
     if (!started) return;
@@ -1031,6 +1056,33 @@ function updateGlimpse(dt) {
 }
 
 /* ================= jumpscare ================= */
+function eat() {
+  if (!started || dead || won) return;
+  if (!P.inTent) { msg('음식은 텐트 안에 있다.', 2); return; }
+  if (food <= 0) { msg('음식이 다 떨어졌다...', 2.5); return; }
+  if (hunger > 92) { msg('아직 배고프지 않다.', 2); return; }
+  food--; foodMeshes[food].visible = false;
+  hunger = Math.min(100, hunger + 30); hungerWarn = 0;
+  for (let i = 0; i < 5; i++) noiseBurst(0.07, rand(1800, 3200), 1.5, 0.18, 'bandpass', i * 0.13);
+  msg(`음식을 먹었다. (남은 음식 ${food}/${FOOD_MAX})`, 2.5);
+}
+function updateHunger(dt) {
+  hunger = Math.max(0, hunger - dt * 0.55);
+  if (hunger < 30 && hungerWarn < 1) { hungerWarn = 1; msg(food > 0 ? '배가 고프다. 텐트에 가서 음식을 먹자.' : '배가 고프다... 음식이 없다.', 4); }
+  if (hunger < 10 && hungerWarn < 2) { hungerWarn = 2; msg('<span style="color:#ff6a6a">너무 배고파서 쓰러질 것 같다!</span>', 4); }
+  if (hunger <= 0) starve();
+}
+function starve() {
+  dead = true; vm.visible = false; $('touch').classList.remove('on');
+  if (document.exitPointerLock) document.exitPointerLock();
+  $('flash').style.transition = 'opacity 1.5s'; $('flash').style.background = '#000'; $('flash').style.opacity = 1;
+  setTimeout(() => {
+    $('over').querySelector('h1').textContent = '쓰러졌다';
+    $('overText').innerHTML = `굶주림으로 쓰러졌다.<br>${day}일차 · 버틴 밤 ${nights}/3`;
+    $('over').classList.remove('hidden');
+    if (AC) master.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4);
+  }, 1600);
+}
 function jumpscare(reason) {
   if (dead) return; dead = true; scareT = 0;
   hidePrompt(); $('touch').classList.remove('on');
@@ -1316,10 +1368,13 @@ function updateHUD(dt) {
   $('phase').textContent = isNight() ? '밤 — 텐트 안에 있을 것' : time >= 17.5 ? '해질녘' : time < 7 ? '새벽' : '낮';
   $('phase').style.color = isNight() ? '#ff7a7a' : time >= 17.5 ? '#ffb27a' : '';
   $('staBar').style.width = (P.stamina * 100) + '%';
-  $('info').innerHTML = `🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
+  $('hgBar').style.width = hunger + '%';
+  $('hgBar').style.background = hunger > 30 ? '#e0b44a' : '#d9534f';
+  $('tQ').classList.toggle('show', P.inTent && !dead);
+  $('info').innerHTML = `🥫 텐트 음식 ${food}/${FOOD_MAX}<br>🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
   const a = (dead || won) ? null : currentAction();
   const h = $('hint');
-  if (a) { h.textContent = `${isTouch ? '[행동]' : '[E]'} ${a.label}`; h.style.opacity = 1; } else h.style.opacity = 0;
+  if (a) { h.textContent = `${isTouch ? '[행동]' : '[E]'} ${a.label}` + (P.inTent ? `  ·  ${isTouch ? '[먹기]' : '[Q]'} 음식 먹기 (${food}/${FOOD_MAX})` : ''); h.style.opacity = 1; } else h.style.opacity = 0;
 }
 
 /* ================= main loop ================= */
@@ -1337,6 +1392,7 @@ function frame() {
       if (!dead) {
         if (isNight() && !P.inTent) { outsideNightT += dt; if (M.state === 'hidden' && outsideNightT > 4) spawnChase(); }
         else outsideNightT = 0;
+        updateHunger(dt); if (dead) return render();
         updateMonster(dt); updateTentEvents(dt); updateGlimpse(dt); updateAudio(dt); updateViewModel(dt);
       }
     } else if (dead) {
@@ -1366,7 +1422,7 @@ $('startBtn').addEventListener('click', () => {
   msg('캠핑장에 도착했다. 밤 8시 전에는 반드시 <b>텐트</b>로 돌아와야 한다.', 6);
 });
 
-if (DEBUG) window.__dbg = { P, M, enterTent, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
+if (DEBUG) window.__dbg = { P, M, enterTent, eat, get hunger() { return hunger; }, set hunger(v) { hunger = v; }, get food() { return food; }, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
 const qt = parseFloat(new URLSearchParams(location.search).get('t'));
 if (!isNaN(qt)) $('startBtn').addEventListener('click', () => { time = qt; });
 })();
