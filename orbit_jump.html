@@ -1,0 +1,462 @@
+<title>궤도 점프</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one full-screen canvas of deep space, HUD floating on top, overlay card for start / game over. Single dark theme by choice. */
+:root {
+  color-scheme: dark;
+  --void: #0b0d1f;
+  --nebula: #1b1640;
+  --ink: #eef0ff;
+  --dim: #8f93c4;
+  --flare: #ffb347;
+  --mint: #6ef2c4;
+  --danger: #ff5d73;
+  --display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--body);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+#stage { position: fixed; inset: 0; }
+canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+.hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; justify-content: space-between; align-items: flex-start;
+  pointer-events: none;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat .label { font-size: 11px; letter-spacing: .14em; color: var(--dim); }
+.stat .val { font-family: var(--mono); font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums; }
+.stat.right { align-items: flex-end; }
+.stat.right .val { font-size: 18px; color: var(--flare); }
+.overlay {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(ellipse at center, rgba(11,13,31,.55), rgba(11,13,31,.85));
+}
+.card { max-width: 380px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.card h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(44px, 12vw, 68px); line-height: 1; margin: 0;
+  letter-spacing: .02em;
+  background: linear-gradient(180deg, var(--ink) 30%, var(--flare));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-wrap: balance;
+}
+.card p { margin: 0; color: var(--dim); line-height: 1.6; font-size: 15px; }
+.card .score { font-family: var(--mono); font-size: 15px; color: var(--ink); }
+.card .score b { color: var(--flare); font-size: 22px; }
+.keys { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--dim); }
+.keys span { border: 1px solid #343a78; border-radius: 6px; padding: 3px 9px; font-family: var(--mono); }
+button {
+  font-family: var(--display); font-size: 20px; letter-spacing: .06em;
+  color: var(--void); background: var(--flare);
+  border: 0; border-radius: 999px; padding: 12px 34px; cursor: pointer;
+  box-shadow: 0 0 24px rgba(255,179,71,.45);
+}
+button:focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+button:hover { filter: brightness(1.08); }
+.toast {
+  position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%);
+  font-family: var(--display); font-size: 34px; color: var(--mint);
+  pointer-events: none; opacity: 0; transition: opacity .25s, transform .25s;
+  text-shadow: 0 0 18px rgba(110,242,196,.6);
+}
+.toast.show { opacity: 1; transform: translate(-50%, -60%); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+
+<div id="stage"><canvas id="c" aria-label="게임 화면"></canvas></div>
+
+<div class="hud" aria-live="polite">
+  <div class="stat"><span class="label">점수</span><span class="val" id="score">0</span></div>
+  <div class="stat right"><span class="label">최고</span><span class="val" id="best">0</span></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <h1 id="title">궤도 점프</h1>
+    <p id="msg">행성 궤도를 도는 우주 탐사선이에요.<br>타이밍을 맞춰 발사해 다음 행성의 궤도에 올라타세요.<br>행성은 시간이 지나면 붕괴해요. 오래 머물지 마세요!</p>
+    <div class="score" id="final" hidden></div>
+    <div class="keys"><span>클릭</span><span>탭</span><span>스페이스</span> 로 발사</div>
+    <button id="startBtn" type="button">출발</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+  const $score = document.getElementById('score');
+  const $best = document.getElementById('best');
+  const $overlay = document.getElementById('overlay');
+  const $title = document.getElementById('title');
+  const $msg = document.getElementById('msg');
+  const $final = document.getElementById('final');
+  const $btn = document.getElementById('startBtn');
+  const $toast = document.getElementById('toast');
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = cvs.clientWidth; H = cvs.clientHeight;
+    cvs.width = W * DPR; cvs.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    makeBackdrop();
+  }
+
+  // ---- backdrop stars (parallax) ----
+  let bgStars = [];
+  function makeBackdrop() {
+    bgStars = [];
+    const n = Math.round(W * H / 2600);
+    for (let i = 0; i < n; i++) {
+      bgStars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + .2, d: Math.random() * .5 + .1, t: Math.random() * 6 });
+    }
+  }
+
+  const PLANET_COLORS = [
+    ['#ff8a5c', '#a8324a'], ['#6ec8ff', '#2b3f9e'], ['#b48cff', '#4b2a8a'],
+    ['#6ef2c4', '#1f7a6b'], ['#ffd36e', '#b5631f'], ['#ff7ad9', '#7a2a6b']
+  ];
+
+  let best = 0;
+  try { best = +localStorage.getItem('orbitjump-best') || 0; } catch (e) {}
+  $best.textContent = best;
+
+  let state = 'menu';
+  let planets, gems, parts, ship, camY, score, speed, shake, combo, lastT;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function newPlanet(prev) {
+    const level = score || 0;
+    const r = Math.max(14, rand(18, 32) - level * 0.25);
+    const margin = r + 44;
+    let x;
+    do { x = rand(margin, W - margin); } while (prev && Math.abs(x - prev.x) < 60 && W > 260);
+    const y = prev ? prev.y - rand(170, 240) - Math.min(level * 2, 60) : H * 0.7;
+    const p = {
+      x, baseX: x, y, r, orbit: r + 30,
+      col: PLANET_COLORS[Math.floor(Math.random() * PLANET_COLORS.length)],
+      ring: Math.random() < .35,
+      life: 1, decay: 0,
+      sway: level > 6 && prev ? rand(20, Math.min(70, (W - 2 * margin) / 2)) : 0,
+      swayS: rand(.6, 1.2), phase: Math.random() * 6.28,
+      spin: Math.random() * 6.28
+    };
+    if (p.sway) p.baseX = Math.min(Math.max(x, margin + p.sway), W - margin - p.sway);
+    return p;
+  }
+
+  function addPlanet() {
+    const prev = planets[planets.length - 1];
+    const p = newPlanet(prev);
+    planets.push(p);
+    if (prev && Math.random() < .7) {
+      gems.push({ x: (prev.x + p.baseX) / 2 + rand(-40, 40), y: (prev.y + p.y) / 2, got: false, t: Math.random() * 6 });
+    }
+  }
+
+  function reset() {
+    planets = []; gems = []; parts = [];
+    score = 0; speed = 260; shake = 0; combo = 0;
+    planets.push(newPlanet(null));
+    for (let i = 0; i < 5; i++) addPlanet();
+    const p0 = planets[0];
+    ship = { mode: 'orbit', p: p0, a: -Math.PI / 2, dir: 1, x: 0, y: 0, vx: 0, vy: 0, fly: 0, trail: [] };
+    p0.decay = 0;
+    camY = p0.y - H * 0.68;
+    $score.textContent = 0;
+  }
+
+  function burst(x, y, color, n, spd) {
+    if (reduced) n = Math.ceil(n / 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.28, s = rand(.3, 1) * spd;
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, col: color, r: rand(1, 3) });
+    }
+  }
+
+  function toast(text) {
+    $toast.textContent = text;
+    $toast.classList.add('show');
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => $toast.classList.remove('show'), 650);
+  }
+
+  function launch() {
+    if (state !== 'play' || ship.mode !== 'orbit') return;
+    const d = ship.dir;
+    ship.vx = -Math.sin(ship.a) * d * speed;
+    ship.vy = Math.cos(ship.a) * d * speed;
+    ship.mode = 'fly'; ship.fly = 0;
+    ship.from = ship.p;
+    burst(ship.x, ship.y, '#ffb347', 10, 120);
+  }
+
+  function land(p) {
+    ship.mode = 'orbit';
+    ship.p = p;
+    ship.a = Math.atan2(ship.y - p.y, ship.x - p.x);
+    // orbit direction follows how we came in
+    const cross = (ship.x - p.x) * ship.vy - (ship.y - p.y) * ship.vx;
+    ship.dir = cross >= 0 ? 1 : -1;
+    const skipped = planets.indexOf(p) - planets.indexOf(ship.from);
+    const gain = Math.max(1, skipped);
+    score += gain;
+    combo = ship.fly < 0.55 ? combo + 1 : 0;
+    if (skipped > 1) toast('+' + gain + ' 건너뛰기!');
+    else if (combo >= 2) toast('콤보 x' + combo);
+    $score.textContent = score;
+    speed = Math.min(420, 260 + score * 5);
+    p.decay = Math.min(0.42, 0.2 + score * 0.008);
+    burst(ship.x, ship.y, p.col[0], 18, 160);
+    // drop old planets, keep the field topped up
+    const idx = planets.indexOf(p);
+    for (let i = 0; i < idx; i++) planets[i].dead = true;
+    planets = planets.filter(q => !q.dead || q.y < camY + H + 200);
+    while (planets.length - planets.indexOf(p) < 6) addPlanet();
+  }
+
+  function die(reason) {
+    if (state !== 'play') return;
+    state = 'over';
+    shake = 14;
+    burst(ship.x, ship.y, '#ff5d73', 40, 260);
+    const isBest = score > best;
+    if (isBest) {
+      best = score; $best.textContent = best;
+      try { localStorage.setItem('orbitjump-best', String(best)); } catch (e) {}
+    }
+    setTimeout(() => {
+      $title.textContent = isBest ? '신기록!' : '통신 두절';
+      $msg.textContent = reason;
+      $final.hidden = false;
+      $final.innerHTML = '점수 <b>' + score + '</b> &nbsp;·&nbsp; 최고 ' + best;
+      $btn.textContent = '다시 하기';
+      $overlay.hidden = false;
+      $btn.focus();
+    }, 700);
+  }
+
+  function start() {
+    resize();
+    reset();
+    state = 'play';
+    $overlay.hidden = true;
+  }
+
+  // ---- update ----
+  function update(dt) {
+    const t = performance.now() / 1000;
+    for (const p of planets) {
+      if (p.sway) p.x = p.baseX + Math.sin(t * p.swayS + p.phase) * p.sway;
+      p.spin += dt * 0.3;
+    }
+
+    if (state === 'play' || state === 'over') {
+      if (ship.mode === 'orbit' && state === 'play') {
+        const p = ship.p;
+        ship.a += ship.dir * (speed / p.orbit) * dt;
+        ship.x = p.x + Math.cos(ship.a) * p.orbit;
+        ship.y = p.y + Math.sin(ship.a) * p.orbit;
+        p.life -= p.decay * dt;
+        if (p.life <= 0) { burst(p.x, p.y, p.col[0], 50, 220); p.gone = true; die('행성이 붕괴했어요. 더 빨리 뛰어야 해요.'); }
+      } else if (ship.mode === 'fly' && state === 'play') {
+        ship.x += ship.vx * dt; ship.y += ship.vy * dt; ship.fly += dt;
+        for (const p of planets) {
+          if (p === ship.from || p.gone) continue;
+          const dx = ship.x - p.x, dy = ship.y - p.y, dd = Math.hypot(dx, dy);
+          if (dd < p.r + 4) { die('행성 표면에 충돌했어요.'); break; }
+          if (dd < p.orbit + 3) { land(p); break; }
+        }
+        for (const g of gems) {
+          if (!g.got && Math.hypot(ship.x - g.x, ship.y - g.y) < 20) {
+            g.got = true; score += 2; $score.textContent = score;
+            burst(g.x, g.y, '#6ef2c4', 14, 140); toast('+2 별조각');
+          }
+        }
+        const sy = ship.y - camY;
+        if (state === 'play' && (ship.x < -30 || ship.x > W + 30 || sy > H + 30 || sy < -60 || ship.fly > 3.2)) {
+          die('깊은 우주로 사라졌어요.');
+        }
+      }
+      if (state === 'play' && !reduced) {
+        ship.trail.push({ x: ship.x, y: ship.y });
+        if (ship.trail.length > 22) ship.trail.shift();
+      }
+      const target = (ship.mode === 'orbit' ? ship.p.y : ship.y) - H * 0.68;
+      camY += (target - camY) * Math.min(1, dt * 3);
+    }
+
+    for (const q of parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= .96; q.vy *= .96; q.life -= dt * 1.4; }
+    parts = parts.filter(q => q.life > 0);
+    gems = gems.filter(g => g.y < camY + H + 100);
+    shake *= .88;
+  }
+
+  // ---- draw ----
+  function draw() {
+    const t = performance.now() / 1000;
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b0d1f'); g.addColorStop(1, '#1b1640');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    const cy = camY || 0;
+    for (const s of bgStars) {
+      let y = (s.y - cy * s.d) % H; if (y < 0) y += H;
+      ctx.globalAlpha = .4 + .6 * Math.abs(Math.sin(t * .8 + s.t));
+      ctx.fillStyle = '#dfe3ff';
+      ctx.fillRect(s.x, y, s.r, s.r);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.save();
+    if (shake > .3) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+    ctx.translate(0, -cy);
+
+    if (planets) {
+      for (const p of planets) {
+        if (p.gone) continue;
+        if (p.y - cy < -120 || p.y - cy > H + 120) continue;
+        const active = ship && ship.mode === 'orbit' && ship.p === p;
+        // orbit ring
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.orbit, 0, 6.283);
+        ctx.setLineDash([4, 7]); ctx.lineWidth = 1.2;
+        ctx.strokeStyle = active ? 'rgba(255,179,71,.55)' : 'rgba(143,147,196,.35)';
+        ctx.stroke(); ctx.setLineDash([]);
+        // life arc
+        if (active || p.life < 1) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r + 9, -Math.PI / 2, -Math.PI / 2 + 6.283 * Math.max(0, p.life));
+          ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.strokeStyle = p.life > .35 ? '#6ef2c4' : '#ff5d73';
+          ctx.stroke(); ctx.lineCap = 'butt';
+        }
+        // glow
+        const jitter = p.life < .35 && active ? rand(-1.5, 1.5) : 0;
+        const glow = ctx.createRadialGradient(p.x, p.y, p.r * .5, p.x, p.y, p.r * 2.2);
+        glow.addColorStop(0, p.col[0] + '55'); glow.addColorStop(1, p.col[0] + '00');
+        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, 6.283); ctx.fill();
+        // body
+        const body = ctx.createRadialGradient(p.x - p.r * .4 + jitter, p.y - p.r * .4, p.r * .1, p.x, p.y, p.r);
+        body.addColorStop(0, p.col[0]); body.addColorStop(1, p.col[1]);
+        ctx.fillStyle = body; ctx.beginPath(); ctx.arc(p.x + jitter, p.y, p.r, 0, 6.283); ctx.fill();
+        // craters
+        ctx.fillStyle = 'rgba(0,0,0,.18)';
+        for (let k = 0; k < 3; k++) {
+          const a = p.spin + k * 2.1, rr = p.r * (.35 + k * .12);
+          ctx.beginPath(); ctx.arc(p.x + jitter + Math.cos(a) * rr * .8, p.y + Math.sin(a) * rr * .5, p.r * (.16 - k * .03), 0, 6.283); ctx.fill();
+        }
+        if (p.ring) {
+          ctx.save(); ctx.translate(p.x + jitter, p.y); ctx.rotate(-.35);
+          ctx.beginPath(); ctx.ellipse(0, 0, p.r * 1.6, p.r * .38, 0, 0, 6.283);
+          ctx.strokeStyle = p.col[0] + 'aa'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore();
+        }
+      }
+
+      for (const gm of gems) {
+        if (gm.got) continue;
+        const s = 8 + Math.sin(t * 4 + gm.t) * 1.5;
+        ctx.save(); ctx.translate(gm.x, gm.y); ctx.rotate(t * 1.5 + gm.t);
+        ctx.fillStyle = '#6ef2c4'; ctx.shadowColor = '#6ef2c4'; ctx.shadowBlur = 12;
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const rr = k % 2 ? s * .42 : s, a = k * Math.PI / 4;
+          ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+
+      // trail
+      if (ship && state !== 'over') {
+        for (let i = 0; i < ship.trail.length; i++) {
+          const q = ship.trail[i];
+          ctx.globalAlpha = i / ship.trail.length * .6;
+          ctx.fillStyle = '#ffb347';
+          ctx.beginPath(); ctx.arc(q.x, q.y, 1 + i / ship.trail.length * 3, 0, 6.283); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // aim preview while orbiting
+        if (ship.mode === 'orbit') {
+          const d = ship.dir, tx = -Math.sin(ship.a) * d, ty = Math.cos(ship.a) * d;
+          ctx.strokeStyle = 'rgba(255,179,71,.35)'; ctx.setLineDash([2, 8]); ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(ship.x, ship.y); ctx.lineTo(ship.x + tx * 90, ship.y + ty * 90); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // ship
+        const ang = ship.mode === 'orbit' ? ship.a + ship.dir * Math.PI / 2 : Math.atan2(ship.vy, ship.vx);
+        ctx.save(); ctx.translate(ship.x, ship.y); ctx.rotate(ang);
+        ctx.shadowColor = '#ffb347'; ctx.shadowBlur = 14;
+        ctx.fillStyle = '#fff4e0';
+        ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffb347';
+        ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(-11 - Math.random() * 4, 3); ctx.lineTo(-11 - Math.random() * 4, -3); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    for (const q of parts) {
+      ctx.globalAlpha = Math.max(0, q.life);
+      ctx.fillStyle = q.col;
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.033, (now - (lastT || now)) / 1000);
+    lastT = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ---- input ----
+  cvs.addEventListener('pointerdown', e => { e.preventDefault(); launch(); });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') {
+      if (state === 'play') { e.preventDefault(); launch(); }
+      else if (!$overlay.hidden && e.code === 'Space') { e.preventDefault(); start(); }
+    }
+  });
+  $btn.addEventListener('click', start);
+  window.addEventListener('resize', () => { resize(); if (state === 'menu') { reset(); } });
+
+  resize();
+  reset();
+  // menu: ship circles the first planet behind the overlay
+  const menuSpin = (now) => {
+    if (state === 'menu' && ship) {
+      const p = ship.p;
+      ship.a += 0.02; ship.x = p.x + Math.cos(ship.a) * p.orbit; ship.y = p.y + Math.sin(ship.a) * p.orbit;
+    }
+    if (state === 'menu') requestAnimationFrame(menuSpin);
+  };
+  requestAnimationFrame(menuSpin);
+  requestAnimationFrame(loop);
+})();
+</script>
