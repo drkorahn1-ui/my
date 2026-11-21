@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>캠핑의 밤</title>
+<style>
+  :root { --fg:#e8dccb; --accent:#ff6a2b; --danger:#c3141c; }
+  * { box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#000; color:var(--fg);
+    font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif; touch-action:none; }
+  canvas#game { display:block; }
+  #hud { position:fixed; top:12px; left:12px; font-size:13px; text-shadow:0 1px 3px #000; pointer-events:none; z-index:5; width:200px; }
+  #clock { font-size:20px; font-weight:700; letter-spacing:1px; }
+  #phase { font-size:12px; opacity:.8; margin-bottom:8px; }
+  .bar { display:flex; align-items:center; gap:6px; margin:4px 0; }
+  .bar span { width:44px; font-size:11px; opacity:.85; }
+  .bar div { flex:1; height:6px; background:rgba(255,255,255,.12); border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:50%; background:var(--accent); transition:width .15s; }
+  #staBar { background:#9bd17a !important; } #brBar { background:#7ab8e8 !important; }
+  #info { margin-top:6px; font-size:12px; line-height:1.6; }
+  #cross { position:fixed; left:50%; top:50%; width:4px; height:4px; margin:-2px 0 0 -2px; border-radius:50%; background:rgba(255,255,255,.6); z-index:5; pointer-events:none; }
+  #hint { position:fixed; left:50%; bottom:22%; transform:translateX(-50%); font-size:15px; padding:6px 14px; background:rgba(0,0,0,.45); border-radius:6px; opacity:0; transition:opacity .2s; z-index:5; pointer-events:none; white-space:nowrap; }
+  #msg { position:fixed; left:50%; top:22%; transform:translateX(-50%); width:min(90vw,640px); text-align:center; font-size:18px; line-height:1.5; text-shadow:0 2px 6px #000; opacity:0; transition:opacity .6s; z-index:6; pointer-events:none; }
+  #prompt { position:fixed; left:50%; top:58%; transform:translate(-50%,-50%); font-size:34px; font-weight:800; color:#fff; text-align:center; text-shadow:0 0 12px var(--danger),0 0 30px var(--danger); display:none; z-index:7; pointer-events:none; animation:pulse .5s infinite alternate; }
+  #prompt small { display:block; font-size:14px; font-weight:400; opacity:.9; margin-top:4px; }
+  #prompt.ok { color:#bfe3ff; text-shadow:0 0 12px #2a6fb0; animation:none; }
+  @keyframes pulse { from{transform:translate(-50%,-50%) scale(1)} to{transform:translate(-50%,-50%) scale(1.08)} }
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:3; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.85) 100%); }
+  #danger { position:fixed; inset:0; pointer-events:none; z-index:3; opacity:0; background:radial-gradient(ellipse at center, rgba(120,0,0,0) 35%, rgba(150,0,0,.85) 100%); }
+  #grain { position:fixed; inset:-50%; pointer-events:none; z-index:4; opacity:.07; animation:grain .4s steps(4) infinite; }
+  @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-7%,4%)} 50%{transform:translate(5%,-6%)} 75%{transform:translate(-3%,8%)} 100%{transform:translate(6%,2%)} }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:9; }
+  #face { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:8; pointer-events:none; }
+  #face.on { display:block; animation:shake .06s infinite; }
+  @keyframes shake { 0%{transform:translate(4px,-6px) scale(1.05)} 50%{transform:translate(-6px,5px) scale(1.08)} 100%{transform:translate(3px,4px) scale(1.04)} }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:20; background:radial-gradient(ellipse at center,#160c06 0%,#000 75%); }
+  .screen.hidden { display:none; }
+  .screen h1 { font-size:clamp(36px,9vw,72px); margin:0 0 6px; letter-spacing:6px; color:#f1e3cf; text-shadow:0 0 24px rgba(255,90,30,.5); }
+  .screen .sub { opacity:.75; margin-bottom:22px; font-size:15px; }
+  .screen .story { max-width:520px; line-height:1.8; font-size:15px; opacity:.9; margin-bottom:18px; }
+  .screen .story b { color:#ff8a5a; }
+  .screen .ctrl { font-size:13px; opacity:.7; line-height:1.8; margin-bottom:22px; max-width:520px; }
+  .btn { font:inherit; font-size:18px; padding:12px 34px; border:1px solid #ff6a2b; background:rgba(255,106,43,.12); color:#ffd9c4; border-radius:8px; cursor:pointer; letter-spacing:2px; }
+  .btn:hover { background:rgba(255,106,43,.3); }
+  #over h1 { color:#d42b2b; text-shadow:0 0 30px #900; }
+  #win h1 { color:#ffe2a6; }
+  #pause { background:rgba(0,0,0,.6); font-size:20px; cursor:pointer; }
+  /* touch controls */
+  #touch { display:none; position:fixed; inset:0; z-index:10; pointer-events:none; }
+  #touch.on { display:block; }
+  #joyBase { position:absolute; width:120px; height:120px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.05); left:30px; bottom:40px; }
+  #joyKnob { position:absolute; width:50px; height:50px; border-radius:50%; background:rgba(255,255,255,.3); left:35px; top:35px; }
+  .tbtn { position:absolute; pointer-events:auto; width:66px; height:66px; border-radius:50%; border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.35); color:#fff; font-size:13px; display:flex; align-items:center; justify-content:center; text-align:center; line-height:1.1; }
+  .tbtn.act { background:rgba(255,106,43,.45); }
+  #tE { right:24px; bottom:110px; width:76px; height:76px; font-size:15px; }
+  #tB { right:112px; bottom:40px; }
+  #tR { right:24px; bottom:24px; }
+  #tF { right:112px; bottom:124px; width:54px; height:54px; font-size:11px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="clock">1일차 · 13:00</div>
+  <div id="phase">낮</div>
+  <div class="bar"><span>모닥불</span><div><i id="fuelBar"></i></div></div>
+  <div class="bar"><span>체력</span><div><i id="staBar"></i></div></div>
+  <div class="bar"><span>숨</span><div><i id="brBar"></i></div></div>
+  <div id="info"></div>
+</div>
+<div id="cross"></div>
+<div id="hint"></div>
+<div id="msg"></div>
+<div id="prompt">숨을 참아라!<small id="promptSub">SPACE 꾹 누르기</small></div>
+<div id="vignette"></div>
+<div id="danger"></div>
+<div id="grain"></div>
+<canvas id="face"></canvas>
+<div id="flash"></div>
+
+<div id="touch">
+  <div id="joyBase"><div id="joyKnob"></div></div>
+  <div class="tbtn" id="tE">행동</div>
+  <div class="tbtn" id="tB">숨<br>참기</div>
+  <div class="tbtn" id="tR">달리기</div>
+  <div class="tbtn" id="tF">손전등</div>
+</div>
+
+<div id="intro" class="screen">
+  <h1>캠핑의 밤</h1>
+  <div class="sub">3D 생존 공포 게임</div>
+  <div class="story">
+    외딴 숲속의 캠핑장. 관리인이 떠나며 남긴 말은 하나뿐이었다.<br>
+    <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
+    낮에는 숲에서 장작을 모아 모닥불을 지키고,<br>
+    밤에는 텐트 안에서 숨을 죽여라. 불이 약하면 <b>그것</b>이 텐트 가까이 온다.<br>
+    <b>세 번의 밤</b>을 버티면 구조대가 온다.
+  </div>
+  <div class="ctrl" id="ctrlText">
+    WASD 이동 · 마우스 시점 · Shift 달리기 · E 행동(줍기/불 피우기/텐트)<br>
+    F 손전등 · <b style="color:#7ab8e8">SPACE 꾹 = 숨 참기</b> · 헤드폰 권장 🎧
+  </div>
+  <button class="btn" id="startBtn">캠핑 시작</button>
+</div>
+<div id="over" class="screen hidden">
+  <h1>잡혔다</h1>
+  <div class="sub" id="overText"></div>
+  <button class="btn" onclick="location.reload()">다시 하기</button>
+</div>
+<div id="win" class="screen hidden">
+  <h1>아침이 왔다</h1>
+  <div class="story">세 번째 밤이 끝났다. 멀리서 구조대 차량의 사이렌이 들린다.<br>숲 가장자리, 나무 사이에서 무언가가 끝까지 너를 지켜보고 있었다.</div>
+  <button class="btn" onclick="location.reload()">다시 하기</button>
+</div>
+<div id="pause" class="screen hidden">일시정지 — 클릭하여 계속</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const smoothstep = (a, b, x) => smooth01((x - a) / (b - a));
+
+if (isTouch) {
+  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(줍기/불 피우기/텐트) · <b style="color:#7ab8e8">숨 참기 버튼 꾹</b> · 헤드폰 권장 🎧';
+  $('promptSub').textContent = '숨 참기 버튼 꾹 누르기';
+}
+
+/* ---------------- renderer / scene ---------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: !isTouch });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.domElement.id = 'game';
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0.02);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.08, 600);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------------- textures ---------------- */
+function glowTex(inner, mid) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, inner); g.addColorStop(0.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const eyeTex = glowTex('rgba(255,250,235,1)', 'rgba(255,40,20,0.85)');
+const fireTex = glowTex('rgba(255,240,180,1)', 'rgba(255,120,30,0.8)');
+(function grain() {
+  const c = document.createElement('canvas'); c.width = c.height = 160;
+  const x = c.getContext('2d'); const d = x.createImageData(160, 160);
+  for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  x.putImageData(d, 0, 0);
+  $('grain').style.background = `url(${c.toDataURL()})`;
+})();
+
+/* ---------------- terrain ---------------- */
+function H(x, z) {
+  const k = smoothstep(10, 30, Math.hypot(x, z));
+  return k * (Math.sin(x * 0.05) * 1.6 + Math.cos(z * 0.07) * 1.3 + Math.sin((x + z) * 0.13) * 0.5 + Math.sin(x * 0.21 - z * 0.17) * 0.3);
+}
+{
+  const g = new THREE.PlaneGeometry(420, 420, 140, 140);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position, cols = [];
+  const cA = new THREE.Color(0x2c3a1f), cB = new THREE.Color(0x3d3322), cC = new THREE.Color(0x4a4030), tmp = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, H(x, z));
+    const n = (Math.sin(x * 0.3) * Math.cos(z * 0.27) + 1) * 0.5;
+    tmp.copy(cA).lerp(cB, n * 0.8 + Math.random() * 0.2);
+    const r = Math.hypot(x, z); if (r < 9) tmp.lerp(cC, 1 - r / 9);
+    cols.push(tmp.r, tmp.g, tmp.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.computeVertexNormals();
+  scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
+}
+
+/* ---------------- trees & rocks ---------------- */
+const obstacles = []; // {x,z,r}
+{
+  const N = 460;
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.32, 1, 6); trunkGeo.translate(0, 0.5, 0);
+  const leafGeo = new THREE.ConeGeometry(1, 1, 7); leafGeo.translate(0, 0.5, 0);
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x3a2a1d }), N);
+  const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), N * 3);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), col = new THREE.Color();
+  let li = 0;
+  for (let i = 0; i < N; i++) {
+    let x, z, r;
+    do { const a = Math.random() * Math.PI * 2; r = 13 + Math.pow(Math.random(), 0.8) * 140; x = Math.cos(a) * r; z = Math.sin(a) * r; }
+    while (Math.abs(x - 9) < 4 && Math.abs(z + 2) < 4);
+    const h = rand(7, 14), y = H(x, z) - 0.2;
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6.28);
+    m.compose(v.set(x, y, z), q, s.set(1, h * 0.55, 1)); trunks.setMatrixAt(i, m);
+    const layers = [[0.25, 0.42, 0.5], [0.45, 0.32, 0.4], [0.63, 0.22, 0.32]];
+    const dead = Math.random() < 0.12;
+    for (const [yy, rr, hh] of layers) {
+      m.compose(v.set(x, y + h * yy, z), q, dead ? s.set(0.001, 0.001, 0.001) : s.set(h * rr, h * hh, h * rr));
+      leaves.setMatrixAt(li, m);
+      col.setHSL(0.33 + rand(-0.04, 0.03), rand(0.25, 0.45), rand(0.12, 0.2)); leaves.setColorAt(li, col); li++;
+    }
+    obstacles.push({ x, z, r: 0.45 });
+  }
+  scene.add(trunks, leaves);
+  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x555049 });
+  for (let i = 0; i < 70; i++) {
+    const a = Math.random() * 6.28, r = rand(11, 140), x = Math.cos(a) * r, z = Math.sin(a) * r, sc = rand(0.3, 1.4);
+    const rk = new THREE.Mesh(rockGeo, rockMat);
+    rk.position.set(x, H(x, z) - 0.15 * sc, z); rk.scale.set(sc, sc * 0.7, sc); rk.rotation.set(rand(0, 3), rand(0, 3), 0);
+    scene.add(rk);
+    if (sc > 0.7) obstacles.push({ x, z, r: sc * 0.9 });
+  }
+}
+
+/* ---------------- camp: fire ---------------- */
+const fireLight = new THREE.PointLight(0xff8a3a, 2, 28, 1.6);
+fireLight.position.set(0, 1.1, 0); scene.add(fireLight);
+const flames = [];
+{
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0x6a645c });
+  const sg = new THREE.DodecahedronGeometry(0.22, 0);
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * 6.28, st = new THREE.Mesh(sg, stoneMat);
+    st.position.set(Math.cos(a) * 0.75, 0.1, Math.sin(a) * 0.75); st.rotation.set(rand(0, 3), rand(0, 3), 0); scene.add(st);
+  }
+  const logMat = new THREE.MeshLambertMaterial({ color: 0x2b1a10 });
+  for (let i = 0; i < 4; i++) {
+    const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 1.1, 6), logMat);
+    lg.rotation.z = Math.PI / 2 - 0.35; lg.rotation.y = i * Math.PI / 4 * 2 + 0.3; lg.position.y = 0.2; scene.add(lg);
+  }
+  for (let i = 0; i < 6; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex, color: i < 3 ? 0xffa040 : 0xffd27a, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    sp.userData = { ph: Math.random() * 10, ox: rand(-0.2, 0.2), oz: rand(-0.2, 0.2), base: i < 3 ? 1.1 : 0.7 };
+    scene.add(sp); flames.push(sp);
+  }
+  obstacles.push({ x: 0, z: 0, r: 0.9 });
+}
+const embers = (() => {
+  const n = 40, g = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), life = [];
+  for (let i = 0; i < n; i++) { life.push(Math.random()); }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xff9a40, size: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  scene.add(pts);
+  return { pts, pos, life, n, seeds: life.map(() => [rand(-0.3, 0.3), rand(-0.3, 0.3)]) };
+})();
+
+/* ---------------- camp: tent ---------------- */
+const TENT = { x: 0, z: -6 };
+const tentMat = new THREE.MeshLambertMaterial({ color: 0xb8632a, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthWrite: false });
+const lantern = new THREE.PointLight(0xffb060, 0, 6, 1);
+{
+  const tent = new THREE.Group(); tent.position.set(TENT.x, 0, TENT.z);
+  const tg = new THREE.ConeGeometry(2.2, 2.4, 4, 1, true); tg.rotateY(Math.PI / 4); tg.translate(0, 1.2, 0);
+  const shell = new THREE.Mesh(tg, tentMat); shell.renderOrder = 1; tent.add(shell);
+  const fz = 2.2 * Math.SQRT1_2;
+  const eg = new THREE.BufferGeometry();
+  eg.setAttribute('position', new THREE.Float32BufferAttribute([-0.7, 0.01, fz + 0.02, 0.7, 0.01, fz + 0.02, 0, 1.6, fz * (1 - 1.6 / 2.4) + 0.02], 3));
+  eg.computeVertexNormals();
+  const flap = new THREE.Mesh(eg, new THREE.MeshLambertMaterial({ color: 0x3a1a0a, side: THREE.DoubleSide })); tent.add(flap);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(fz * 2, fz * 2), new THREE.MeshLambertMaterial({ color: 0x2a2a30 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.02; tent.add(floor);
+  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 1.8), new THREE.MeshLambertMaterial({ color: 0x2f4d6e }));
+  bag.position.set(-0.4, 0.09, -0.2); tent.add(bag);
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.18, 8), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+  lamp.position.set(0.7, 0.1, -0.6); tent.add(lamp);
+  lantern.position.set(0.7, 0.45, -0.6); tent.add(lantern);
+  scene.add(tent);
+  obstacles.push({ x: TENT.x, z: TENT.z, r: 1.75 });
+}
+/* car */
+{
+  const car = new THREE.Group(); car.position.set(9, 0, -2); car.rotation.y = 0.4;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4.2), new THREE.MeshLambertMaterial({ color: 0x3b4650 }));
+  body.position.y = 0.8; car.add(body);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.75, 2.2), new THREE.MeshLambertMaterial({ color: 0x1b2128 }));
+  top.position.set(0, 1.65, -0.3); car.add(top);
+  const wg = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 12); wg.rotateZ(Math.PI / 2);
+  const wm = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  for (const [x, z] of [[1, 1.3], [-1, 1.3], [1, -1.3], [-1, -1.3]]) { const w = new THREE.Mesh(wg, wm); w.position.set(x, 0.38, z); car.add(w); }
+  scene.add(car);
+  obstacles.push({ x: 9, z: -2, r: 2.2 });
+}
+
+/* ---------------- sky ---------------- */
+const hemi = new THREE.HemisphereLight(0xbfd6ff, 0x2a2418, 0.8); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(60, 80, 30); scene.add(sun);
+const moonLight = new THREE.DirectionalLight(0x6f86c0, 0); moonLight.position.set(-60, 90, -80); scene.add(moonLight);
+const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 16, 16), new THREE.MeshBasicMaterial({ color: 0xdfe6f5, fog: false, transparent: true }));
+moon.position.set(-150, 170, -200); scene.add(moon);
+const stars = (() => {
+  const n = 900, pos = [];
+  for (let i = 0; i < n; i++) {
+    const u = Math.random(), v = Math.random() * 0.9 + 0.1, th = u * 6.283, ph = Math.acos(v);
+    pos.push(Math.sin(ph) * Math.cos(th) * 320, Math.cos(ph) * 320, Math.sin(ph) * Math.sin(th) * 320);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const s = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, sizeAttenuation: false, fog: false, transparent: true }));
+  scene.add(s); return s;
+})();
+
+/* flashlight */
+const flash = new THREE.SpotLight(0xfff1d8, 0, 45, 0.42, 0.55, 1.2);
+flash.position.set(0.2, -0.15, 0);
+camera.add(flash); camera.add(flash.target); flash.target.position.set(0, -0.1, -1);
+
+/* ---------------- sticks ---------------- */
+const sticks = [];
+{
+  const sg = new THREE.CylinderGeometry(0.045, 0.06, 1.1, 5); sg.rotateZ(Math.PI / 2);
+  const sm = new THREE.MeshLambertMaterial({ color: 0x7a5432, emissive: 0x1a0d04 });
+  for (let i = 0; i < 26; i++) {
+    const g = new THREE.Group();
+    const a = new THREE.Mesh(sg, sm), b = new THREE.Mesh(sg, sm);
+    b.rotation.y = 0.8; b.position.y = 0.06; b.scale.set(0.8, 1, 1);
+    g.add(a, b); scene.add(g);
+    const st = { g, active: true }; placeStick(st); sticks.push(st);
+  }
+}
+function placeStick(st) {
+  let x, z, ok;
+  do {
+    const a = Math.random() * 6.28, r = rand(12, 85); x = Math.cos(a) * r; z = Math.sin(a) * r;
+    ok = !obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 0.8);
+  } while (!ok);
+  st.g.position.set(x, H(x, z) + 0.06, z); st.g.rotation.y = Math.random() * 6.28;
+  st.active = true; st.g.visible = true;
+}
+
+/* ---------------- monster ---------------- */
+const monster = (() => {
+  const g = new THREE.Group();
+  const black = new THREE.MeshLambertMaterial({ color: 0x0c0b0a });
+  const skin = new THREE.MeshLambertMaterial({ color: 0x3a3530 });
+  const legGeo = new THREE.CylinderGeometry(0.06, 0.04, 1.35, 5); legGeo.translate(0, -0.675, 0);
+  const legL = new THREE.Mesh(legGeo, black), legR = new THREE.Mesh(legGeo, black);
+  legL.position.set(-0.13, 1.35, 0); legR.position.set(0.13, 1.35, 0);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.12, 1.15, 6), black); torso.position.y = 1.9;
+  const ribs = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.35, 6), skin); ribs.position.y = 2.2;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.42, 5), skin); neck.position.y = 2.62; neck.rotation.x = 0.25;
+  const head = new THREE.Group(); head.position.set(0, 2.88, 0.06);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 10), skin); skull.scale.set(0.85, 1.3, 0.9); head.add(skull);
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshBasicMaterial({ color: 0x050000 }));
+  mouth.scale.set(0.9, 1.8, 0.5); mouth.position.set(0, -0.12, 0.16); head.add(mouth);
+  const eyes = [];
+  for (const ex of [-0.075, 0.075]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
+    e.position.set(ex, 0.05, 0.17); head.add(e);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff3020, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
+    sp.scale.set(0.28, 0.28, 1); sp.position.copy(e.position); sp.renderOrder = 3; head.add(sp); eyes.push(sp);
+  }
+  const mkArm = side => {
+    const pivot = new THREE.Group(); pivot.position.set(side * 0.3, 2.35, 0);
+    const ag = new THREE.CylinderGeometry(0.045, 0.03, 2.0, 5); ag.translate(0, -1.0, 0);
+    pivot.add(new THREE.Mesh(ag, black));
+    for (let f = -1; f <= 1; f++) {
+      const fg = new THREE.ConeGeometry(0.018, 0.32, 4); fg.rotateX(Math.PI); fg.translate(0, -0.16, 0);
+      const fm = new THREE.Mesh(fg, skin); fm.position.set(f * 0.03, -2.0, 0); fm.rotation.z = f * 0.2; pivot.add(fm);
+    }
+    pivot.rotation.z = side * 0.12;
+    return pivot;
+  };
+  const armL = mkArm(-1), armR = mkArm(1);
+  g.add(legL, legR, torso, ribs, neck, head, armL, armR);
+  g.visible = false; scene.add(g);
+  return { g, head, armL, armR, legL, legR, eyes };
+})();
+
+/* glimpse eyes in the tree line */
+const glimpse = new THREE.Group();
+for (const ex of [-0.09, 0.09]) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff2a10, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
+  sp.scale.set(0.35, 0.35, 1); sp.position.x = ex; glimpse.add(sp);
+}
+glimpse.visible = false; scene.add(glimpse);
+
+/* ---------------- audio (all synthesized) ---------------- */
+let AC = null, master, noiseBuf, windGain, windFilt, fireGain;
+function initAudio() {
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination);
+    master = AC.createGain(); master.gain.value = 0.9; master.connect(comp);
+    noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const loop = (freq, type, q) => {
+      const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+      const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = AC.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(master); s.start();
+      return [g, f];
+    };
+    [windGain, windFilt] = loop(380, 'lowpass', 0.7);
+    [fireGain] = loop(900, 'bandpass', 0.6);
+  } catch (e) { AC = null; }
+}
+function env(g, t, vol, atk, dur) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + atk);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+}
+function noiseBurst(dur, freq, q, vol, type = 'bandpass', when = 0, sweepTo) {
+  if (!AC) return; const t = AC.currentTime + when;
+  const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const f = AC.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+  const g = AC.createGain(); env(g, t, vol, 0.01, dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
+}
+function tone(freq, dur, vol, type = 'sine', slide, when = 0, atk = 0.01) {
+  if (!AC) return; const t = AC.currentTime + when;
+  const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+  const g = AC.createGain(); env(g, t, vol, atk, dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+function heartbeat(vol) { tone(62, 0.16, vol, 'sine', 40); tone(55, 0.18, vol * 0.75, 'sine', 36, 0.2); }
+function growl(vol, dur = 1.2, base = 78) {
+  if (!AC) return; const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(base, t); o.frequency.linearRampToValueAtTime(base * 0.7, t + dur);
+  const lfo = AC.createOscillator(); lfo.frequency.value = 23 + Math.random() * 10;
+  const lg = AC.createGain(); lg.gain.value = 22; lfo.connect(lg); lg.connect(o.frequency);
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 650;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.25); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); lfo.start(t); o.stop(t + dur + 0.1); lfo.stop(t + dur + 0.1);
+  noiseBurst(dur, 350, 1, vol * 0.5, 'lowpass');
+}
+function breathSniff(vol) { for (let i = 0; i < 3; i++) noiseBurst(0.18, 1800, 2, vol, 'bandpass', i * 0.22, 900); }
+function screech() {
+  if (!AC) return;
+  for (let i = 0; i < 6; i++) tone(420 + i * 210, 1.5, 0.13, 'sawtooth', 1700 + i * 190, 0, 0.02);
+  noiseBurst(1.7, 2600, 0.6, 0.55, 'highpass');
+  growl(0.8, 1.5, 95);
+}
+function footstep(vol, heavy) { noiseBurst(heavy ? 0.16 : 0.08, heavy ? 220 : 700, 0.8, vol, 'lowpass'); if (heavy) tone(48, 0.15, vol * 0.8, 'sine', 30); }
+function zipper() { for (let i = 0; i < 8; i++) noiseBurst(0.04, 3500, 3, 0.12, 'bandpass', i * 0.045); }
+function whoosh() { noiseBurst(0.8, 300, 0.7, 0.35, 'bandpass', 0, 2000); }
+function whisper() { noiseBurst(0.9, 1400, 6, 0.18, 'bandpass', 0, 2600); noiseBurst(0.7, 2200, 8, 0.12, 'bandpass', 0.5, 1200); }
+function gasp() { noiseBurst(0.5, 1200, 1.2, 0.4, 'bandpass', 0, 2500); }
+
+/* ---------------- input ---------------- */
+const keys = {};
+let touchMove = { x: 0, y: 0 }, touchBreath = false, touchRun = false, locked = false;
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') e.preventDefault();
+  if (e.code === 'KeyE' && !e.repeat) interact();
+  if (e.code === 'KeyF' && !e.repeat) toggleFlash();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  if (!isTouch && started && !dead && !won) $('pause').classList.toggle('hidden', locked);
+});
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  P.yaw -= e.movementX * 0.0022; P.pitch -= e.movementY * 0.0022;
+});
+renderer.domElement.addEventListener('click', () => { if (started && !isTouch && !dead) renderer.domElement.requestPointerLock(); });
+$('pause').addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+if (isTouch) {
+  $('touch').classList.add('on');
+  const base = $('joyBase'), knob = $('joyKnob');
+  let joyId = null, lookId = null, jx = 0, jy = 0, lx = 0, ly = 0;
+  const btn = (id, down, up) => {
+    const el = $(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('act'); down(); }, { passive: false });
+    el.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('act'); up && up(); }, { passive: false });
+    el.addEventListener('touchcancel', () => { el.classList.remove('act'); up && up(); });
+  };
+  btn('tE', interact); btn('tF', toggleFlash);
+  btn('tB', () => touchBreath = true, () => touchBreath = false);
+  btn('tR', () => touchRun = true, () => touchRun = false);
+  addEventListener('touchstart', e => {
+    if (!started) return;
+    for (const t of e.changedTouches) {
+      if (t.target.classList && t.target.classList.contains('tbtn')) continue;
+      if (t.clientX < innerWidth * 0.4 && joyId === null) {
+        joyId = t.identifier; jx = t.clientX; jy = t.clientY;
+        base.style.left = (jx - 60) + 'px'; base.style.top = (jy - 60) + 'px'; base.style.bottom = 'auto';
+      } else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+    }
+  }, { passive: false });
+  addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyId) {
+        let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy);
+        if (l > 50) { dx *= 50 / l; dy *= 50 / l; }
+        knob.style.left = (35 + dx) + 'px'; knob.style.top = (35 + dy) + 'px';
+        touchMove.x = dx / 50; touchMove.y = dy / 50;
+      } else if (t.identifier === lookId) {
+        P.yaw -= (t.clientX - lx) * 0.006; P.pitch -= (t.clientY - ly) * 0.006; lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+  const end = e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyId) { joyId = null; touchMove.x = touchMove.y = 0; knob.style.left = knob.style.top = '35px'; }
+      if (t.identifier === lookId) lookId = null;
+    }
+  };
+  addEventListener('touchend', end); addEventListener('touchcancel', end);
+}
+
+/* ---------------- game state ---------------- */
+const P = { x: 3, z: 5, yaw: -0.6, pitch: 0, stamina: 1, breath: 1, sticks: 0, inTent: false, flash: false, bob: 0, stepT: 0, gasping: 0 };
+let started = false, dead = false, won = false;
+let time = 13.0, day = 1, nights = 0, nightStarted = false, fuel = 60;
+let outsideNightT = 0;
+const MAX_STICKS = 6;
+const M = { state: 'hidden', speed: 3, t: 0, tx: 0, tz: 0, sniffT: 0, sniffDur: 4.5, growlT: 0, stepT: 0, hbT: 0, sniffSnd: 0 };
+const tentEvt = { timer: 10 };
+const G = { active: false, t: 0, cool: 4, seen: 0 };
+let scareT = 0;
+
+const isNight = () => time >= 20 || time < 5;
+function rate(t) {
+  if (t >= 6 && t < 18.5) return 12.5 / 110;
+  if (t >= 18.5 && t < 20) return 1.5 / 28;
+  if (t >= 20 || t < 5) return 9 / 85;
+  return 1 / 9;
+}
+function sunF(t) {
+  if (t >= 7 && t < 17.5) return 1;
+  if (t >= 17.5 && t < 20) return 1 - smooth01((t - 17.5) / 2.5);
+  if (t >= 5 && t < 7) return smooth01((t - 5) / 2);
+  return 0;
+}
+function duskF(t) { return Math.max(0, 1 - Math.abs(t - 18.7) / 1.4) + 0.7 * Math.max(0, 1 - Math.abs(t - 5.9) / 1.0); }
+
+let msgTimer = null;
+function msg(text, dur = 4) {
+  const el = $('msg'); el.innerHTML = text; el.style.opacity = 1;
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => el.style.opacity = 0, dur * 1000);
+}
+function toggleFlash() {
+  if (!started || dead) return;
+  P.flash = !P.flash; tone(1800, 0.03, 0.08, 'square');
+}
+
+/* ---------------- interactions ---------------- */
+const TENT_DOOR = { x: TENT.x, z: TENT.z + 2.2 };
+function nearestStick() {
+  let best = null, bd = 2.4;
+  for (const s of sticks) if (s.active) {
+    const d = Math.hypot(s.g.position.x - P.x, s.g.position.z - P.z);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function currentAction() {
+  if (P.inTent) return { label: '밖으로 나가기', fn: exitTent };
+  if (Math.hypot(P.x - TENT_DOOR.x, P.z - TENT_DOOR.z) < 1.9) return { label: '텐트에 들어가기', fn: enterTent };
+  if (Math.hypot(P.x, P.z) < 2.7 && P.sticks > 0) return { label: `모닥불에 장작 넣기 (${P.sticks})`, fn: feedFire };
+  const s = nearestStick();
+  if (s) return P.sticks >= MAX_STICKS ? { label: '더 이상 들 수 없다', fn: () => msg('손이 꽉 찼다. 모닥불에 먼저 넣자.', 2) } : { label: '장작 줍기', fn: () => pickStick(s) };
+  return null;
+}
+function interact() { if (!started || dead || won) return; const a = currentAction(); if (a) a.fn(); }
+function pickStick(s) {
+  s.active = false; s.g.visible = false; P.sticks++;
+  noiseBurst(0.12, 900, 1, 0.25, 'bandpass'); noiseBurst(0.08, 1400, 1, 0.2, 'bandpass', 0.1);
+}
+function feedFire() {
+  fuel = Math.min(100, fuel + P.sticks * 15); P.sticks = 0; whoosh();
+  msg('불길이 커졌다.', 2);
+}
+function enterTent() {
+  P.inTent = true; P.yaw = Math.PI; P.pitch = -0.05; zipper();
+  if (isNight()) msg('텐트 안이다. 소리 내지 마라...', 3);
+  else if (time >= 17.5) msg('텐트 안. 곧 밤이 된다.', 3);
+  if (M.state === 'chase') startTentApproach(false);
+}
+function exitTent() {
+  P.inTent = false; P.x = TENT_DOOR.x; P.z = TENT_DOOR.z + 0.4; P.yaw = Math.PI; zipper();
+  if (isNight()) {
+    msg('<span style="color:#ff6a6a">밤에 밖으로 나왔다...</span>', 2.5);
+    if (M.state !== 'hidden') { M.state = 'chase'; M.speed = 4.6; growl(0.6, 1.0); hidePrompt(); }
+  }
+}
+
+/* ---------------- monster logic ---------------- */
+const mp = monster.g.position;
+function spawnChase() {
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  let x = P.x - fx * 30, z = P.z - fz * 30;
+  const r = Math.hypot(x, z); if (r > 135) { x *= 135 / r; z *= 135 / r; }
+  mp.set(x, H(x, z), z);
+  M.state = 'chase'; M.speed = 3.2 + nights * 0.3; M.growlT = 0;
+  growl(0.5, 1.6); msg('<span style="color:#ff5a5a">뒤에서... 무언가 온다. 텐트로 달려!</span>', 3);
+}
+function startTentApproach(spawnFar) {
+  if (spawnFar) {
+    const a = Math.random() * 6.28; const x = TENT.x + Math.cos(a) * 20, z = TENT.z + Math.sin(a) * 20;
+    mp.set(x, H(x, z), z);
+    msg('...밖에서 발소리가 들린다.', 3);
+  }
+  const sides = [Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI * 0.75, -Math.PI * 0.75];
+  const a = sides[Math.floor(Math.random() * sides.length)];
+  M.tx = TENT.x + Math.sin(a) * 2.5; M.tz = TENT.z + Math.cos(a) * 2.5;
+  M.state = 'approach';
+}
+function showPrompt() { $('prompt').style.display = 'block'; }
+function hidePrompt() { $('prompt').style.display = 'none'; $('prompt').classList.remove('ok'); }
+function moveTo(tx, tz, speed, dt) {
+  const dx = tx - mp.x, dz = tz - mp.z, d = Math.hypot(dx, dz);
+  if (d > 0.01) { const s = Math.min(d, speed * dt); mp.x += dx / d * s; mp.z += dz / d * s; }
+  mp.y = H(mp.x, mp.z);
+  monster.g.lookAt(tx, mp.y, tz);
+  return d;
+}
+function animateMonster(dt, walking, speed) {
+  M.t += dt * (walking ? speed * 1.3 : 1);
+  const s = Math.sin(M.t * 2.2);
+  monster.legL.rotation.x = walking ? s * 0.5 : 0;
+  monster.legR.rotation.x = walking ? -s * 0.5 : 0;
+  monster.armL.rotation.x = walking ? -s * 0.45 : Math.sin(M.t * 0.7) * 0.1;
+  monster.armR.rotation.x = walking ? s * 0.45 : Math.sin(M.t * 0.6 + 1) * 0.1;
+  monster.head.rotation.z = Math.sin(M.t * 0.9) * 0.25;
+  monster.g.position.y += walking ? Math.abs(s) * 0.08 : 0;
+}
+const holding = () => keys.Space || touchBreath;
+
+function updateMonster(dt) {
+  if (M.state === 'hidden') { monster.g.visible = false; return; }
+  monster.g.visible = true;
+  const dPlayer = Math.hypot(P.x - mp.x, P.z - mp.z);
+
+  if (M.state === 'chase') {
+    if (P.inTent) { startTentApproach(false); return; }
+    M.speed = Math.min(7.0, M.speed + dt * 0.13);
+    moveTo(P.x, P.z, M.speed, dt);
+    animateMonster(dt, true, M.speed);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 2.2 / M.speed; footstep(clamp(0.6 - dPlayer / 50, 0.03, 0.6), true); }
+    M.growlT -= dt; if (M.growlT <= 0) { M.growlT = rand(2.5, 4.5); growl(clamp(0.7 - dPlayer / 45, 0.05, 0.7), 1.1); }
+    if (dPlayer < 1.5) jumpscare('밤에 텐트 밖에 있었다');
+  } else if (M.state === 'approach') {
+    const d = moveTo(M.tx, M.tz, 2.3, dt);
+    animateMonster(dt, true, 2.3);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 0.85; footstep(clamp(0.45 - d / 40, 0.04, 0.45), true); }
+    if (d < 0.1) {
+      M.state = 'sniff'; M.sniffT = 0; M.sniffDur = rand(4, 5.5) + nights * 0.5; M.sniffSnd = 0;
+      monster.g.lookAt(TENT.x, mp.y, TENT.z);
+      showPrompt(); growl(0.35, 1.4, 60);
+    }
+  } else if (M.state === 'sniff') {
+    M.sniffT += dt;
+    animateMonster(dt, false, 0);
+    // crouch and lean in toward the tent wall
+    mp.y = H(mp.x, mp.z) - 0.85;
+    monster.g.lookAt(TENT.x, mp.y, TENT.z); monster.g.rotateX(0.35);
+    monster.head.rotation.x = Math.sin(M.sniffT * 3) * 0.2 + 0.3;
+    monster.armR.rotation.x = -0.6 - Math.sin(M.sniffT * 2) * 0.2;
+    M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.25); }
+    $('prompt').classList.toggle('ok', !!holding());
+    if (M.sniffT > 0.8 && !holding()) { hidePrompt(); jumpscare('숨소리를 들켰다'); return; }
+    if (M.sniffT >= M.sniffDur) {
+      hidePrompt(); M.state = 'leave';
+      const a = Math.random() * 6.28; M.tx = TENT.x + Math.cos(a) * 26; M.tz = TENT.z + Math.sin(a) * 26;
+      msg('...발소리가 멀어진다.', 3);
+      tentEvt.timer = rand(8, 14);
+    }
+  } else if (M.state === 'leave') {
+    const d = moveTo(M.tx, M.tz, 3, dt);
+    animateMonster(dt, true, 3);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 0.8; footstep(clamp(0.3 - (26 - d) / 60, 0.02, 0.3), true); }
+    if (d < 0.5) M.state = 'hidden';
+  }
+}
+
+function updateTentEvents(dt) {
+  if (!isNight() || !P.inTent || M.state !== 'hidden') return;
+  tentEvt.timer -= dt;
+  if (tentEvt.timer <= 0) {
+    const chance = (fuel > 40 ? 0.35 : fuel > 15 ? 0.7 : 0.95) + nights * 0.12;
+    if (Math.random() < chance) startTentApproach(true);
+    else tentEvt.timer = rand(7, 12);
+  }
+}
+
+function updateGlimpse(dt) {
+  const evening = time >= 18.6 && time < 20 && !P.inTent;
+  if (!G.active) {
+    if (evening) { G.cool -= dt; if (G.cool <= 0) {
+      const a = P.yaw + rand(-1.3, 1.3), d = rand(28, 42);
+      const x = P.x - Math.sin(a) * d, z = P.z - Math.cos(a) * d;
+      glimpse.position.set(x, H(x, z) + 2.4, z);
+      glimpse.lookAt(P.x, glimpse.position.y, P.z);
+      glimpse.visible = true; G.active = true; G.t = 0; G.seen = 0;
+    } }
+    return;
+  }
+  G.t += dt;
+  const v = new THREE.Vector3().subVectors(glimpse.position, camera.position).normalize();
+  const f = new THREE.Vector3(); camera.getWorldDirection(f);
+  if (f.dot(v) > 0.96) { G.seen += dt; if (G.seen > 0.7) { glimpse.visible = false; G.active = false; G.cool = rand(6, 10); whisper(); } }
+  if (G.t > 8 || !evening) { glimpse.visible = false; G.active = false; G.cool = rand(5, 9); }
+}
+
+/* ---------------- jumpscare ---------------- */
+function jumpscare(reason) {
+  if (dead) return; dead = true; scareT = 0;
+  hidePrompt(); $('touch').classList.remove('on');
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  monster.g.visible = true;
+  mp.set(camera.position.x + fx * 0.85, camera.position.y - 2.9, camera.position.z + fz * 0.85);
+  monster.g.lookAt(camera.position.x, mp.y, camera.position.z);
+  monster.head.rotation.set(0.1, 0, 0);
+  monster.armL.rotation.set(-1.9, 0, -0.5); monster.armR.rotation.set(-1.9, 0, 0.5);
+  P.pitch = 0;
+  screech();
+  $('flash').style.transition = 'none'; $('flash').style.opacity = 0.8; $('flash').style.background = '#fff';
+  requestAnimationFrame(() => { $('flash').style.transition = 'opacity .4s'; $('flash').style.opacity = 0; });
+  setTimeout(() => { drawFace(); $('face').classList.add('on'); }, 700);
+  setTimeout(() => {
+    $('face').classList.remove('on');
+    if (document.exitPointerLock) document.exitPointerLock();
+    $('overText').innerHTML = `${reason}.<br>${day}일차 밤 · 버틴 밤 ${nights}/3`;
+    $('over').classList.remove('hidden');
+    if (AC) master.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4);
+  }, 2100);
+}
+function drawFace() {
+  const c = $('face'), w = c.width = innerWidth, h = c.height = innerHeight, x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
+  const s = Math.min(w, h * 0.8), cx = w / 2, cy = h / 2;
+  const g = x.createRadialGradient(cx, cy - s * 0.05, s * 0.05, cx, cy, s * 0.6);
+  g.addColorStop(0, '#a49b8d'); g.addColorStop(0.6, '#4a443d'); g.addColorStop(1, '#0d0c0b');
+  x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, s * 0.34, s * 0.52, 0, 0, 6.29); x.fill();
+  x.strokeStyle = 'rgba(20,10,8,.7)'; x.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { x.beginPath(); let px = cx + rand(-s * .3, s * .3), py = cy + rand(-s * .45, s * .4); x.moveTo(px, py); for (let j = 0; j < 4; j++) { px += rand(-30, 30); py += rand(-30, 30); x.lineTo(px, py); } x.stroke(); }
+  for (const sx of [-1, 1]) {
+    x.fillStyle = '#000'; x.beginPath(); x.ellipse(cx + sx * s * 0.13, cy - s * 0.14, s * 0.09, s * 0.12, sx * 0.25, 0, 6.29); x.fill();
+    const eg = x.createRadialGradient(cx + sx * s * 0.13, cy - s * 0.13, 0, cx + sx * s * 0.13, cy - s * 0.13, s * 0.06);
+    eg.addColorStop(0, '#fff'); eg.addColorStop(0.2, '#ff3a20'); eg.addColorStop(1, 'rgba(255,0,0,0)');
+    x.fillStyle = eg; x.beginPath(); x.arc(cx + sx * s * 0.13, cy - s * 0.13, s * 0.06, 0, 6.29); x.fill();
+  }
+  const my = cy + s * 0.2, mw = s * 0.17, mh = s * 0.23;
+  x.fillStyle = '#080000'; x.beginPath(); x.ellipse(cx, my, mw, mh, 0, 0, 6.29); x.fill();
+  x.fillStyle = '#d8d0bc';
+  for (let i = 0; i < 9; i++) {
+    const tx = cx - mw * 0.85 + i * (mw * 1.7 / 8);
+    const topY = my - mh * Math.sqrt(Math.max(0, 1 - Math.pow((tx - cx) / mw, 2)));
+    const botY = my + mh * Math.sqrt(Math.max(0, 1 - Math.pow((tx - cx) / mw, 2)));
+    x.beginPath(); x.moveTo(tx - 9, topY + 2); x.lineTo(tx + 9, topY + 2); x.lineTo(tx, topY + rand(30, 60)); x.fill();
+    x.beginPath(); x.moveTo(tx - 9, botY - 2); x.lineTo(tx + 9, botY - 2); x.lineTo(tx, botY - rand(25, 50)); x.fill();
+  }
+  const rv = x.createRadialGradient(cx, cy, s * 0.3, cx, cy, Math.max(w, h) * 0.7);
+  rv.addColorStop(0, 'rgba(0,0,0,0)'); rv.addColorStop(1, 'rgba(120,0,0,.8)');
+  x.fillStyle = rv; x.fillRect(0, 0, w, h);
+}
+
+/* ---------------- time ---------------- */
+function updateTime(dt) {
+  const prev = time;
+  time += dt * rate(time);
+  if (time >= 24) { time -= 24; day++; }
+  if (prev < 17.5 && time >= 17.5) msg('그림자가 길어진다. 장작을 모아 불을 키워두자.', 4);
+  if (prev < 18.6 && time >= 18.6) msg('해가 지고 있다... 밤이 되기 전에 텐트로 돌아가야 한다.', 4.5);
+  if (prev < 19.4 && time >= 19.4) { msg('숲 깊은 곳에서 무언가가 울부짖었다.', 4); growl(0.15, 2.5, 55); }
+  if (prev < 20 && time >= 20) {
+    nightStarted = true; tentEvt.timer = rand(6, 11);
+    if (P.inTent) msg('밤이 됐다. 절대 밖으로 나가지 마라.', 4);
+    else msg('<span style="color:#ff6a6a">밤이다. 당장 텐트로 들어가!</span>', 4);
+  }
+  if (prev < 5 && time >= 5 && nightStarted) {
+    nightStarted = false; nights++;
+    if (M.state !== 'hidden') { M.state = 'hidden'; hidePrompt(); }
+    if (nights >= 3) { win(); return; }
+    msg(`${nights}번째 밤을 버텼다. 동이 튼다...`, 5);
+    for (const s of sticks) if (!s.active) placeStick(s);
+  }
+}
+function win() {
+  won = true; hidePrompt();
+  if (document.exitPointerLock) document.exitPointerLock();
+  setTimeout(() => $('win').classList.remove('hidden'), 1500);
+  msg('해가 떠오른다...', 3);
+}
+
+/* ---------------- player ---------------- */
+const TENT_CAM = new THREE.Vector3(TENT.x, 1.0, TENT.z - 0.55);
+function updatePlayer(dt) {
+  P.pitch = clamp(P.pitch, -1.35, 1.35);
+  // breath
+  if (holding() && P.gasping <= 0) {
+    P.breath -= dt / 6.5;
+    if (P.breath <= 0) { P.breath = 0; P.gasping = 1.6; gasp(); if (M.state === 'sniff') { hidePrompt(); jumpscare('숨이 차서 헐떡였다'); return; } }
+  } else P.breath = Math.min(1, P.breath + dt / 3.5);
+  if (P.gasping > 0) P.gasping -= dt;
+
+  if (P.inTent) {
+    camera.position.copy(TENT_CAM);
+    P.yaw = clamp(P.yaw, Math.PI - 2.6, Math.PI + 2.6);
+    camera.rotation.set(P.pitch, P.yaw, 0);
+    P.stamina = Math.min(1, P.stamina + dt * 0.25);
+    return;
+  }
+  let f = 0, s = 0;
+  if (keys.KeyW || keys.ArrowUp) f += 1;
+  if (keys.KeyS || keys.ArrowDown) f -= 1;
+  if (keys.KeyD || keys.ArrowRight) s += 1;
+  if (keys.KeyA || keys.ArrowLeft) s -= 1;
+  f -= touchMove.y; s += touchMove.x;
+  const len = Math.hypot(f, s); if (len > 1) { f /= len; s /= len; }
+  const moving = len > 0.1;
+  const sprint = (keys.ShiftLeft || keys.ShiftRight || touchRun) && moving && P.stamina > 0.02 && f > 0;
+  if (sprint) P.stamina = Math.max(0, P.stamina - dt / 4.5); else P.stamina = Math.min(1, P.stamina + dt / 7);
+  const speed = sprint ? 7 : 3.8;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+  P.x += (fx * f + rx * s) * speed * dt; P.z += (fz * f + rz * s) * speed * dt;
+  for (const o of obstacles) {
+    const dx = P.x - o.x, dz = P.z - o.z, d = Math.hypot(dx, dz), m = o.r + 0.35;
+    if (d < m && d > 0.0001) { P.x = o.x + dx / d * m; P.z = o.z + dz / d * m; }
+  }
+  const r = Math.hypot(P.x, P.z);
+  if (r > 140) { P.x *= 140 / r; P.z *= 140 / r; if (Math.random() < 0.02) msg('숲이 너무 깊다. 더는 갈 수 없다.', 2); }
+  if (moving) {
+    P.bob += dt * speed * 2.2;
+    P.stepT -= dt; if (P.stepT <= 0) { P.stepT = sprint ? 0.32 : 0.5; footstep(sprint ? 0.16 : 0.09, false); }
+  }
+  camera.position.set(P.x, H(P.x, P.z) + 1.65 + (moving ? Math.sin(P.bob) * 0.05 : 0), P.z);
+  camera.rotation.set(P.pitch, P.yaw, 0);
+}
+
+/* ---------------- environment ---------------- */
+const cDay = new THREE.Color(0x8fb0cf), cDusk = new THREE.Color(0xc8653a), cNight = new THREE.Color(0x020309), cTmp = new THREE.Color();
+let fireCrackT = 0, ambT = 2, hbT = 0, gameT = 0;
+function updateEnv(dt) {
+  const s = sunF(time), dk = duskF(time);
+  cTmp.copy(cNight).lerp(cDay, s).lerp(cDusk, Math.min(0.6, dk * 0.6) * (0.3 + s));
+  scene.background = cTmp; scene.fog.color.copy(cTmp);
+  scene.fog.density = 0.012 + (1 - s) * 0.035;
+  hemi.intensity = 0.05 + s * 0.75;
+  sun.intensity = s * 0.8; sun.color.setRGB(1, 1 - dk * 0.35, 1 - dk * 0.6);
+  moonLight.intensity = (1 - s) * 0.14;
+  stars.material.opacity = clamp(1 - s * 1.5, 0, 1); stars.visible = s < 0.7;
+  moon.material.opacity = clamp(1 - s * 1.3, 0, 1); moon.visible = s < 0.8;
+  flash.intensity = P.flash ? 2.4 : 0;
+  lantern.intensity = P.inTent ? 1.1 : 0;
+  tentMat.opacity = P.inTent ? 0.8 : 0.97;
+
+  // fire
+  fuel = Math.max(0, fuel - dt * 0.32);
+  const ff = fuel / 100, flick = 0.85 + Math.sin(gameT * 13) * 0.07 + Math.sin(gameT * 31) * 0.05 + Math.random() * 0.06;
+  fireLight.intensity = (fuel > 0 ? 0.25 + ff * 2.3 : 0) * flick;
+  fireLight.distance = 8 + ff * 22;
+  for (const fl of flames) {
+    const u = fl.userData, k = fuel > 0 ? 0.25 + ff * 0.9 : 0;
+    const sc = u.base * k * (0.8 + Math.sin(gameT * 9 + u.ph) * 0.2);
+    fl.scale.set(sc * 0.8, sc * 1.3, 1);
+    fl.position.set(u.ox, 0.25 + sc * 0.45, u.oz);
+    fl.visible = k > 0;
+  }
+  for (let i = 0; i < embers.n; i++) {
+    embers.life[i] += dt * 0.5; if (embers.life[i] > 1) { embers.life[i] = 0; embers.seeds[i] = [rand(-0.3, 0.3), rand(-0.3, 0.3)]; }
+    const l = embers.life[i], sd = embers.seeds[i];
+    embers.pos[i * 3] = sd[0] + Math.sin(l * 9 + i) * 0.15; embers.pos[i * 3 + 1] = 0.3 + l * (1 + ff * 2.5); embers.pos[i * 3 + 2] = sd[1];
+  }
+  embers.pts.geometry.attributes.position.needsUpdate = true;
+  embers.pts.visible = fuel > 3;
+}
+function updateAudio(dt) {
+  if (!AC) return;
+  const s = sunF(time), night = 1 - s;
+  windGain.gain.setTargetAtTime((0.05 + night * 0.1 + Math.sin(gameT * 0.3) * 0.03) * (P.inTent ? 0.6 : 1), AC.currentTime, 0.5);
+  windFilt.frequency.setTargetAtTime(300 + Math.sin(gameT * 0.21) * 120, AC.currentTime, 0.5);
+  const dFire = P.inTent ? 6 : Math.hypot(P.x, P.z);
+  const fv = (fuel / 100) * clamp(1 - dFire / 22, 0, 1);
+  fireGain.gain.setTargetAtTime(fv * 0.12, AC.currentTime, 0.2);
+  fireCrackT -= dt;
+  if (fireCrackT <= 0) { fireCrackT = rand(0.05, 0.3); if (fv > 0.02) noiseBurst(0.03, rand(1500, 4000), 2, fv * 0.5, 'bandpass'); }
+  ambT -= dt;
+  if (ambT <= 0) {
+    if (s > 0.5) { ambT = rand(3, 8); const b = rand(2400, 3400); for (let i = 0; i < 3; i++) tone(b, 0.07, 0.04, 'sine', b * 1.3, i * 0.12); }
+    else if (M.state === 'hidden') { ambT = rand(0.4, 1.4); for (let i = 0; i < 3; i++) tone(4300, 0.025, 0.018, 'square', null, i * 0.05); }
+    else ambT = 1; // crickets fall silent when it is near
+  }
+  // heartbeat
+  let hbRate = 0;
+  if (M.state === 'chase') hbRate = 0.32 + clamp(Math.hypot(P.x - mp.x, P.z - mp.z) / 40, 0, 1) * 0.6;
+  else if (M.state === 'sniff') hbRate = 0.38;
+  else if (M.state === 'approach') hbRate = 0.6;
+  else if (isNight() && !P.inTent) hbRate = 0.8;
+  if (hbRate) { hbT -= dt; if (hbT <= 0) { hbT = hbRate; heartbeat(0.35); } }
+}
+function updateDanger() {
+  let d = 0;
+  if (M.state === 'chase') d = clamp(1 - Math.hypot(P.x - mp.x, P.z - mp.z) / 25, 0, 1) * 0.8 + 0.15;
+  else if (M.state === 'sniff') d = 0.45 + Math.sin(gameT * 8) * 0.08;
+  else if (M.state === 'approach') d = 0.2;
+  if (holding()) d = Math.max(d, 0.15);
+  $('danger').style.opacity = d;
+}
+function fmtTime(t) { const h = Math.floor(t), m = Math.floor((t - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
+let hudT = 0;
+function updateHUD(dt) {
+  hudT -= dt; if (hudT > 0) return; hudT = 0.1;
+  $('clock').textContent = `${day}일차 · ${fmtTime(time)}`;
+  $('phase').textContent = isNight() ? '밤 — 텐트 안에 있을 것' : time >= 17.5 ? '해질녘' : time < 7 ? '새벽' : '낮';
+  $('phase').style.color = isNight() ? '#ff7a7a' : time >= 17.5 ? '#ffb27a' : '';
+  $('fuelBar').style.width = fuel + '%';
+  $('fuelBar').style.background = fuel > 40 ? '#ff6a2b' : fuel > 15 ? '#c98a2b' : '#7a3b2b';
+  $('staBar').style.width = (P.stamina * 100) + '%';
+  $('brBar').style.width = (P.breath * 100) + '%';
+  $('info').innerHTML = `🪵 들고 있는 장작 ${P.sticks}/${MAX_STICKS}<br>🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
+  const a = (dead || won) ? null : currentAction();
+  const h = $('hint');
+  if (a) { h.textContent = `${isTouch ? '[행동]' : '[E]'} ${a.label}`; h.style.opacity = 1; } else h.style.opacity = 0;
+}
+
+/* ---------------- main loop ---------------- */
+const clock = new THREE.Clock();
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, clock.getDelta());
+  const paused = started && !isTouch && !locked && !dead && !won;
+  if (started && !paused) {
+    gameT += dt;
+    if (!dead && !won) {
+      updateTime(dt);
+      updatePlayer(dt);
+      if (!dead) {
+        if (isNight() && !P.inTent) { outsideNightT += dt; if (M.state === 'hidden' && outsideNightT > 4) spawnChase(); }
+        else outsideNightT = 0;
+        updateMonster(dt); updateTentEvents(dt); updateGlimpse(dt); updateAudio(dt);
+      }
+    } else if (dead) {
+      scareT += dt;
+      camera.rotation.set(rand(-0.03, 0.03), P.yaw + rand(-0.03, 0.03), rand(-0.05, 0.05));
+      monster.head.rotation.z = Math.sin(scareT * 40) * 0.3;
+    }
+    updateEnv(dt); updateDanger(); updateHUD(dt);
+  } else if (!started) {
+    gameT += dt; camera.position.set(Math.sin(gameT * 0.05) * 6, 2.2, 7 + Math.cos(gameT * 0.05) * 2);
+    camera.lookAt(0, 1, -4); updateEnv(0);
+  }
+  renderer.render(scene, camera);
+}
+time = 21.5; updateEnv(0); time = 13.0; // moody night backdrop on title screen
+const titleTime = 21.5; time = titleTime;
+frame();
+
+$('startBtn').addEventListener('click', () => {
+  $('intro').classList.add('hidden');
+  time = 13.0; fuel = 60;
+  initAudio();
+  started = true; clock.getDelta();
+  if (!isTouch) renderer.domElement.requestPointerLock();
+  msg('캠핑장에 도착했다. 해가 지기 전에 숲에서 <b>장작</b>을 모아 모닥불에 넣자.', 6);
+});
+
+// debug hook for testing: ?t=19.8 starts near nightfall
+const qt = parseFloat(new URLSearchParams(location.search).get('t'));
+if (new URLSearchParams(location.search).has('debug')) window.__dbg = { P, M, enterTent, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
+if (!isNaN(qt)) $('startBtn').addEventListener('click', () => { time = qt; });
+})();
+</script>
+</body>
+</html>
