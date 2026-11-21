@@ -228,8 +228,8 @@ function newGame(d,attract){
     G.teams.push(T);
     const b=T.base;
     G.ents.push({id:i,team:i,x:b.icx,y:b.icy+20,r:20,vx:0,vy:0,faceX:i%2?-1:1,fy:0,carrying:null,stun:0,inv:0,swing:0,cd:0,grabT:0,grabEgg:null,isPlayer:i===0&&!attract,ai:{think:rnd(0,.5),goal:null,lx:b.icx,ly:b.icy,stuckT:0,jit:0,jx:0,jy:0}});
-    for(let k=0;k<2;k++){const e=mkEgg(0,0,0);placeEgg(T,e,k);}
-    if(i===0&&!attract)placeEgg(T,mkEgg(5,0,0),2);
+    if(i===0&&!attract){for(let k=0;k<T.slotsN;k++)placeEgg(T,mkEgg(5,0,0),k);}
+    else for(let k=0;k<2;k++){const e=mkEgg(0,0,0);placeEgg(T,e,k);}
   });
   G.dog={x:CX,y:CY+200,r:22,vx:0,vy:0,face:1,stun:0,cd:0,tx:CX,ty:CY,chasing:null};
   G.player=G.ents[0];
@@ -882,7 +882,7 @@ function start(){
   newGame(d,false);
   $('titleScr').hidden=true;$('endScr').hidden=true;$('btns').hidden=false;$('bLock').hidden=true;
   for(const id of ['hudTL','hudTC','hudTR'])$(id).hidden=false;
-  toast('🐉 용의 알 선물 + 🛡 우리 집은 무적 기지! 아무도 못 들어와!','gold');
+  toast('🐉 둥지 가득 용의 알! 🛡 우리 집은 무적 기지!','gold');
 }
 $('startBtn').addEventListener('click',start);
 $('againBtn').addEventListener('click',start);
