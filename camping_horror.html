@@ -65,7 +65,6 @@
 <div id="hud">
   <div id="clock">1일차 · 13:00</div>
   <div id="phase">낮</div>
-  <div class="bar"><span>모닥불</span><div><i id="fuelBar"></i></div></div>
   <div class="bar"><span>체력</span><div><i id="staBar"></i></div></div>
   <div class="bar"><span>숨</span><div><i id="brBar"></i></div></div>
   <div id="info"></div>
@@ -95,12 +94,12 @@
   <div class="story">
     외딴 숲속의 캠핑장. 관리인이 떠나며 남긴 말은 하나뿐이었다.<br>
     <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
-    낮에는 숲에서 장작을 모아 모닥불을 지키고,<br>
-    밤에는 텐트 안에서 숨을 죽여라. 불이 약하면 <b>그것</b>이 텐트 가까이 온다.<br>
+    낮에는 숲을 둘러봐도 좋다. 모닥불은 꺼지지 않는다.<br>
+    하지만 밤에는 텐트 안에서 숨을 죽여라. <b>그것</b>이 텐트 가까이 온다.<br>
     <b>세 번의 밤</b>을 버티면 구조대가 온다.
   </div>
   <div class="ctrl" id="ctrlText">
-    WASD 이동 · 마우스 시점 · Shift 달리기 · E 행동(줍기/불 피우기/텐트)<br>
+    WASD 이동 · 마우스 시점 · Shift 달리기 · E 텐트 들어가기/나가기<br>
     F 손전등 · <b style="color:#7ab8e8">SPACE 꾹 = 숨 참기(입 막기)</b> · 헤드폰 권장 🎧
   </div>
   <button class="btn" id="startBtn">캠핑 시작</button>
@@ -139,7 +138,7 @@ const smoothstep = (a, b, x) => smooth01((x - a) / (b - a));
 const C = hex => new THREE.Color(hex).convertSRGBToLinear();
 
 if (isTouch) {
-  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(줍기/불 피우기/텐트) · <b style="color:#7ab8e8">숨 참기 버튼 꾹(입 막기)</b> · 헤드폰 권장 🎧';
+  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · <b style="color:#7ab8e8">숨 참기 버튼 꾹(입 막기)</b> · 헤드폰 권장 🎧';
   $('promptSub').textContent = '숨 참기 버튼 꾹 누르기';
 }
 
@@ -590,7 +589,7 @@ const sticks = [];
     b.rotation.y = 0.8; b.position.y = 0.06; b.scale.set(0.8, 1, 1);
     a.castShadow = b.castShadow = true;
     g.add(a, b); scene.add(g);
-    const st = { g, active: true }; placeStick(st); sticks.push(st);
+    const st = { g, active: true }; placeStick(st); st.active = false; g.visible = false; sticks.push(st);
   }
 }
 function placeStick(st) {
@@ -851,7 +850,7 @@ if (isTouch) {
 }
 
 /* ================= game state ================= */
-const P = { x: 3, z: 5, yaw: -0.6, pitch: 0, stamina: 1, breath: 1, sticks: 0, inTent: false, flash: false, bob: 0, stepT: 0, gasping: 0, moving: 0, sprint: false, roll: 0 };
+const P = { tx: 0, tz: 0, x: 3, z: 5, yaw: -0.6, pitch: 0, stamina: 1, breath: 1, sticks: 0, inTent: false, flash: false, bob: 0, stepT: 0, gasping: 0, moving: 0, sprint: false, roll: 0 };
 let started = false, dead = false, won = false;
 let time = 13.0, day = 1, nights = 0, nightStarted = false, fuel = 60;
 let outsideNightT = 0;
@@ -899,9 +898,6 @@ function nearestStick() {
 function currentAction() {
   if (P.inTent) return { label: '밖으로 나가기', fn: exitTent };
   if (Math.hypot(P.x - TENT_DOOR.x, P.z - TENT_DOOR.z) < 1.9) return { label: '텐트에 들어가기', fn: enterTent };
-  if (Math.hypot(P.x, P.z) < 2.7 && P.sticks > 0) return { label: `모닥불에 장작 넣기 (${P.sticks})`, fn: feedFire };
-  const s = nearestStick();
-  if (s) return P.sticks >= MAX_STICKS ? { label: '더 이상 들 수 없다', fn: () => msg('손이 꽉 찼다. 모닥불에 먼저 넣자.', 2) } : { label: '장작 줍기', fn: () => pickStick(s) };
   return null;
 }
 function interact() { if (!started || dead || won) return; const a = currentAction(); if (a) a.fn(); }
@@ -914,7 +910,7 @@ function feedFire() {
   msg('불길이 커졌다.', 2);
 }
 function enterTent() {
-  P.inTent = true; P.yaw = Math.PI; P.pitch = -0.05; zipper();
+  P.inTent = true; P.tx = 0; P.tz = 0.6; P.yaw = 0; P.pitch = -0.05; zipper();
   if (isNight()) msg('텐트 안이다. 소리 내지 마라...', 3);
   else if (time >= 17.5) msg('텐트 안. 곧 밤이 된다.', 3);
   if (M.state === 'chase') startTentApproach(false);
@@ -1019,7 +1015,7 @@ function updateTentEvents(dt) {
   if (!isNight() || !P.inTent || M.state !== 'hidden') return;
   tentEvt.timer -= dt;
   if (tentEvt.timer <= 0) {
-    const chance = (fuel > 40 ? 0.35 : fuel > 15 ? 0.7 : 0.95) + nights * 0.12;
+    const chance = 0.45 + nights * 0.15;
     if (Math.random() < chance) startTentApproach(true);
     else tentEvt.timer = rand(7, 12);
   }
@@ -1105,7 +1101,7 @@ function updateTime(dt) {
   const prev = time;
   time += dt * rate(time);
   if (time >= 24) { time -= 24; day++; }
-  if (prev < 17.5 && time >= 17.5) msg('그림자가 길어진다. 장작을 모아 불을 키워두자.', 4);
+  if (prev < 17.5 && time >= 17.5) msg('그림자가 길어진다. 슬슬 캠프로 돌아가자.', 4);
   if (prev < 18.6 && time >= 18.6) msg('해가 지고 있다... 밤이 되기 전에 텐트로 돌아가야 한다.', 4.5);
   if (prev < 19.4 && time >= 19.4) { msg('숲 깊은 곳에서 무언가가 울부짖었다.', 4); growl(0.15, 2.5, 55); }
   if (prev < 20 && time >= 20) {
@@ -1118,7 +1114,6 @@ function updateTime(dt) {
     if (M.state !== 'hidden') { M.state = 'hidden'; hidePrompt(); }
     if (nights >= 3) { win(); return; }
     msg(`${nights}번째 밤을 버텼다. 동이 튼다...`, 5);
-    for (const s of sticks) if (!s.active) placeStick(s);
   }
 }
 function win() {
@@ -1129,7 +1124,7 @@ function win() {
 }
 
 /* ================= player ================= */
-const TENT_CAM = new THREE.Vector3(TENT.x, 1.0, TENT.z - 0.55);
+const TENT_HALF = 0.72; // how far you can crawl from the tent centre (walls slope in)
 function updatePlayer(dt) {
   P.pitch = clamp(P.pitch, -1.35, 1.35);
   if (holding() && P.gasping <= 0) {
@@ -1138,14 +1133,6 @@ function updatePlayer(dt) {
   } else P.breath = Math.min(1, P.breath + dt / 3.5);
   if (P.gasping > 0) P.gasping -= dt;
 
-  if (P.inTent) {
-    camera.position.copy(TENT_CAM);
-    P.yaw = clamp(P.yaw, Math.PI - 2.6, Math.PI + 2.6);
-    camera.rotation.set(P.pitch, P.yaw, 0);
-    P.stamina = Math.min(1, P.stamina + dt * 0.25);
-    P.moving = lerp(P.moving, 0, dt * 8);
-    return;
-  }
   let f = 0, s = 0;
   if (keys.KeyW || keys.ArrowUp) f += 1;
   if (keys.KeyS || keys.ArrowDown) f -= 1;
@@ -1154,6 +1141,18 @@ function updatePlayer(dt) {
   f -= touchMove.y; s += touchMove.x;
   const len = Math.hypot(f, s); if (len > 1) { f /= len; s /= len; }
   const moving = len > 0.1;
+  if (P.inTent) { // crouched, slow movement inside the tent
+    const tfx = -Math.sin(P.yaw), tfz = -Math.cos(P.yaw), trx = Math.cos(P.yaw), trz = -Math.sin(P.yaw);
+    P.tx = clamp(P.tx + (tfx * f + trx * s) * 1.3 * dt, -TENT_HALF, TENT_HALF);
+    P.tz = clamp(P.tz + (tfz * f + trz * s) * 1.3 * dt, -TENT_HALF, TENT_HALF);
+    P.sprint = false; P.stamina = Math.min(1, P.stamina + dt * 0.25);
+    P.moving = lerp(P.moving, moving ? 0.5 : 0, dt * 8);
+    if (moving) { P.bob += dt * 4; P.stepT -= dt; if (P.stepT <= 0) { P.stepT = 0.6; noiseBurst(0.12, 1200, 0.8, 0.05, 'bandpass'); } }
+    P.roll = lerp(P.roll, -s * 0.02, dt * 6);
+    camera.position.set(TENT.x + P.tx, 0.95 + Math.sin(P.bob) * 0.02 * P.moving, TENT.z + P.tz);
+    camera.rotation.set(P.pitch, P.yaw, P.roll);
+    return;
+  }
   const sprint = (keys.ShiftLeft || keys.ShiftRight || touchRun) && moving && P.stamina > 0.02 && f > 0;
   P.sprint = sprint;
   if (sprint) P.stamina = Math.max(0, P.stamina - dt / 4.5); else P.stamina = Math.min(1, P.stamina + dt / 7);
@@ -1247,7 +1246,7 @@ function updateEnv(dt) {
   grassUniforms.uTime.value = gameT;
 
   // fire
-  fuel = Math.max(0, fuel - dt * 0.32);
+  fuel = 100; // the campfire never goes out
   const ff = fuel / 100, flick = 0.85 + Math.sin(gameT * 13) * 0.07 + Math.sin(gameT * 31) * 0.05 + Math.random() * 0.06;
   fireLight.intensity = (fuel > 0 ? 0.6 + ff * 4.5 : 0) * flick;
   fireLight.distance = 10 + ff * 24;
@@ -1334,11 +1333,9 @@ function updateHUD(dt) {
   $('clock').textContent = `${day}일차 · ${fmtTime(time)}`;
   $('phase').textContent = isNight() ? '밤 — 텐트 안에 있을 것' : time >= 17.5 ? '해질녘' : time < 7 ? '새벽' : '낮';
   $('phase').style.color = isNight() ? '#ff7a7a' : time >= 17.5 ? '#ffb27a' : '';
-  $('fuelBar').style.width = fuel + '%';
-  $('fuelBar').style.background = fuel > 40 ? '#ff6a2b' : fuel > 15 ? '#c98a2b' : '#7a3b2b';
   $('staBar').style.width = (P.stamina * 100) + '%';
   $('brBar').style.width = (P.breath * 100) + '%';
-  $('info').innerHTML = `🪵 들고 있는 장작 ${P.sticks}/${MAX_STICKS}<br>🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
+  $('info').innerHTML = `🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
   const a = (dead || won) ? null : currentAction();
   const h = $('hint');
   if (a) { h.textContent = `${isTouch ? '[행동]' : '[E]'} ${a.label}`; h.style.opacity = 1; } else h.style.opacity = 0;
@@ -1385,7 +1382,7 @@ $('startBtn').addEventListener('click', () => {
   started = true; clock.getDelta(); vm.visible = true;
   camera.rotation.set(0, 0, 0); VM.lastYaw = P.yaw;
   if (!isTouch) renderer.domElement.requestPointerLock();
-  msg('캠핑장에 도착했다. 해가 지기 전에 숲에서 <b>장작</b>을 모아 모닥불에 넣자.', 6);
+  msg('캠핑장에 도착했다. 밤 8시 전에는 반드시 <b>텐트</b>로 돌아와야 한다.', 6);
 });
 
 if (DEBUG) window.__dbg = { P, M, enterTent, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
