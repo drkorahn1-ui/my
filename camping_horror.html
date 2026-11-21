@@ -95,7 +95,7 @@
     외딴 숲속의 캠핑장. 관리인이 떠나며 남긴 말은 하나뿐이었다.<br>
     <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
     낮에는 숲을 둘러봐도 좋다. 모닥불은 꺼지지 않는다.<br>
-    하지만 밤에는 텐트 안에서 숨을 죽여라. <b>그것</b>이 텐트 가까이 온다.<br>
+    밤이 되면 <b>그것</b>이 나온다. 하지만 <b>텐트 안에서는 절대 잡히지 않는다.</b><br>
     <b>세 번의 밤</b>을 버티면 구조대가 온다.
   </div>
   <div class="ctrl" id="ctrlText">
@@ -911,7 +911,7 @@ function feedFire() {
 }
 function enterTent() {
   P.inTent = true; P.tx = 0; P.tz = 0.6; P.yaw = 0; P.pitch = -0.05; zipper();
-  if (isNight()) msg('텐트 안이다. 소리 내지 마라...', 3);
+  if (isNight()) msg('텐트 안이다. 여기서는 안전하다... 아마도.', 3);
   else if (time >= 17.5) msg('텐트 안. 곧 밤이 된다.', 3);
   if (M.state === 'chase') startTentApproach(false);
 }
@@ -985,7 +985,7 @@ function updateMonster(dt) {
     if (d < 0.1) {
       M.state = 'sniff'; M.sniffT = 0; M.sniffDur = rand(4, 5.5) + nights * 0.5; M.sniffSnd = 0;
       monster.g.lookAt(TENT.x, mp.y, TENT.z);
-      showPrompt(); growl(0.35, 1.4, 60);
+      growl(0.35, 1.4, 60);
     }
   } else if (M.state === 'sniff') {
     M.sniffT += dt;
@@ -996,7 +996,6 @@ function updateMonster(dt) {
     monster.armR.rotation.x = -0.6 - Math.sin(M.sniffT * 2) * 0.2;
     M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.25); }
     $('prompt').classList.toggle('ok', !!holding());
-    if (M.sniffT > 0.8 && !holding()) { hidePrompt(); jumpscare('숨소리를 들켰다'); return; }
     if (M.sniffT >= M.sniffDur) {
       hidePrompt(); M.state = 'leave';
       const a = Math.random() * 6.28; M.tx = TENT.x + Math.cos(a) * 26; M.tz = TENT.z + Math.sin(a) * 26;
@@ -1106,7 +1105,7 @@ function updateTime(dt) {
   if (prev < 19.4 && time >= 19.4) { msg('숲 깊은 곳에서 무언가가 울부짖었다.', 4); growl(0.15, 2.5, 55); }
   if (prev < 20 && time >= 20) {
     nightStarted = true; tentEvt.timer = rand(6, 11);
-    if (P.inTent) msg('밤이 됐다. 절대 밖으로 나가지 마라.', 4);
+    if (P.inTent) msg('밤이 됐다. 텐트 안에 있으면 안전하다. 밖으로 나가지 마라.', 4);
     else msg('<span style="color:#ff6a6a">밤이다. 당장 텐트로 들어가!</span>', 4);
   }
   if (prev < 5 && time >= 5 && nightStarted) {
@@ -1129,7 +1128,7 @@ function updatePlayer(dt) {
   P.pitch = clamp(P.pitch, -1.35, 1.35);
   if (holding() && P.gasping <= 0) {
     P.breath -= dt / 6.5;
-    if (P.breath <= 0) { P.breath = 0; P.gasping = 1.6; gasp(); if (M.state === 'sniff') { hidePrompt(); jumpscare('숨이 차서 헐떡였다'); return; } }
+    if (P.breath <= 0) { P.breath = 0; P.gasping = 1.6; gasp(); }
   } else P.breath = Math.min(1, P.breath + dt / 3.5);
   if (P.gasping > 0) P.gasping -= dt;
 
