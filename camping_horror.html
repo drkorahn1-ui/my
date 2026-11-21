@@ -97,7 +97,7 @@
     <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
     낮에는 숲을 둘러봐도 좋다. 모닥불은 꺼지지 않는다.<br>
     밤이 되면 <b>그것</b>이 나온다. 하지만 <b>텐트 안에서는 절대 잡히지 않는다.</b><br>
-    텐트에는 <b>음식이 10개</b> 있다. 배가 고프면 텐트 안에서 먹어라.<br>
+    텐트에는 <b>음식이 110개</b> 있다. 배가 고프면 텐트 안에서 먹어라.<br>
     <b>세 번의 밤</b>을 버티면 구조대가 온다.
   </div>
   <div class="ctrl" id="ctrlText">
@@ -515,7 +515,8 @@ for (let i = 0; i < (HQ ? 34 : 18); i++) {
 
 /* ================= camp: tent & props ================= */
 const TENT = { x: 0, z: -6 };
-const FOOD_MAX = 10, foodMeshes = [];
+const FOOD_MAX = 110, FOOD_SHOWN = 10, foodMeshes = []; // 10 laid out + a box holding 100 more
+let foodBox = null;
 let food = FOOD_MAX, hunger = 100, hungerWarn = 0;
 const tentMat = new THREE.MeshStandardMaterial({ map: fabricTex, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthWrite: false, roughness: 0.9 });
 const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
@@ -542,7 +543,7 @@ const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
   const canGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.11, 14), bagGeo = new THREE.BoxGeometry(0.13, 0.05, 0.17);
   const lidMat = new THREE.MeshStandardMaterial({ color: 0xcfd3d6, metalness: 0.8, roughness: 0.3 });
   const foodCols = [0xc0392b, 0x2e86c1, 0xf1c40f, 0x27ae60, 0xe67e22];
-  for (let i = 0; i < FOOD_MAX; i++) {
+  for (let i = 0; i < FOOD_SHOWN; i++) {
     const col = i % 2, row = Math.floor(i / 2), g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: C(foodCols[row]), roughness: 0.5 });
     if ((row + col) % 2 === 0) {
@@ -554,6 +555,15 @@ const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
     g.position.set(0.55 + col * 0.2, 0.02, 0.05 + row * 0.18);
     tent.add(g); foodMeshes.push(g);
   }
+  foodBox = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.32), new THREE.MeshStandardMaterial({ color: C(0xa57a4a), roughness: 0.95 }));
+  box.position.y = 0.15; foodBox.add(box);
+  for (let i = 0; i < 6; i++) { // cans peeking out of the top
+    const c = new THREE.Mesh(canGeo, new THREE.MeshStandardMaterial({ color: C(foodCols[i % 5]), roughness: 0.5 }));
+    c.position.set(-0.13 + (i % 3) * 0.13, 0.31, -0.07 + Math.floor(i / 3) * 0.14); foodBox.add(c);
+  }
+  foodBox.position.set(0.75, 0.02, 1.0); foodBox.rotation.y = 0.2;
+  tent.add(foodBox);
   // stakes & guy lines
   const lineMat = new THREE.LineBasicMaterial({ color: 0xd0c8b0 });
   for (const [cx, cz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
@@ -1061,7 +1071,9 @@ function eat() {
   if (!P.inTent) { msg('음식은 텐트 안에 있다.', 2); return; }
   if (food <= 0) { msg('음식이 다 떨어졌다...', 2.5); return; }
   if (hunger > 92) { msg('아직 배고프지 않다.', 2); return; }
-  food--; foodMeshes[food].visible = false;
+  food--;
+  foodMeshes.forEach((m, i) => { m.visible = i < food; });
+  foodBox.visible = food > FOOD_SHOWN;
   hunger = Math.min(100, hunger + 30); hungerWarn = 0;
   for (let i = 0; i < 5; i++) noiseBurst(0.07, rand(1800, 3200), 1.5, 0.18, 'bandpass', i * 0.13);
   msg(`음식을 먹었다. (남은 음식 ${food}/${FOOD_MAX})`, 2.5);
