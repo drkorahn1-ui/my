@@ -515,6 +515,7 @@ for (let i = 0; i < (HQ ? 34 : 18); i++) {
 
 /* ================= camp: tent & props ================= */
 const TENT = { x: 0, z: -6 };
+let tentGroup = null;
 const FOOD_MAX = 110, FOOD_SHOWN = 10, foodMeshes = []; // 10 laid out + a box holding 100 more
 let foodBox = null;
 let food = FOOD_MAX, hunger = 100, hungerWarn = 0;
@@ -570,7 +571,7 @@ const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
     const top = new THREE.Vector3(cx * 0.9, 1.2, cz * 0.9), st = new THREE.Vector3(cx * 2.4, 0.05, cz * 2.4);
     tent.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([top, st]), lineMat));
   }
-  scene.add(tent);
+  scene.add(tent); tentGroup = tent;
   obstacles.push({ x: TENT.x, z: TENT.z, r: 1.75 });
 
   // car
@@ -695,50 +696,107 @@ const bundle = new THREE.Group();
 const VM = { swayX: 0, swayY: 0, lastYaw: 0, lastPitch: 0, pickT: 0, flashT: 0 };
 
 /* ================= monster ================= */
+// Gaunt, pale, hunched thing: backward-bending legs, arms that drag on the ground,
+// hollow eyes behind lank black hair, and a jaw that opens far too wide.
 const monster = (() => {
   const g = new THREE.Group();
-  const black = new THREE.MeshStandardMaterial({ color: C(0x0c0b0a), roughness: 0.95 });
-  const skin = new THREE.MeshStandardMaterial({ color: C(0x4a433b), roughness: 0.55 });
-  const legGeo = new THREE.CylinderGeometry(0.065, 0.035, 1.35, 7); legGeo.translate(0, -0.675, 0);
-  const legL = new THREE.Mesh(legGeo, black), legR = new THREE.Mesh(legGeo, black);
-  legL.position.set(-0.13, 1.35, 0); legR.position.set(0.13, 1.35, 0);
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.12, 1.15, 8), black); torso.position.y = 1.9;
-  const ribs = new THREE.Mesh(new THREE.CylinderGeometry(0.255, 0.2, 0.4, 8), skin); ribs.position.y = 2.2;
-  g.add(legL, legR, torso, ribs);
-  for (let i = 0; i < 6; i++) { // spine ridges
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 5), skin);
-    sp.position.set(0, 1.55 + i * 0.16, -0.17); sp.rotation.x = -1.9; g.add(sp);
-  }
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.42, 6), skin); neck.position.y = 2.62; neck.rotation.x = 0.25;
-  const head = new THREE.Group(); head.position.set(0, 2.88, 0.06);
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 14), skin); skull.scale.set(0.85, 1.3, 0.9); head.add(skull);
-  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshBasicMaterial({ color: 0x050000 }));
-  mouth.scale.set(0.9, 1.8, 0.5); mouth.position.set(0, -0.12, 0.16); head.add(mouth);
-  const toothMat = new THREE.MeshStandardMaterial({ color: C(0xd8d0bc), roughness: 0.4 });
-  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.04, 4), toothMat); t.position.set(-0.05 + i * 0.02, -0.06, 0.19); t.rotation.x = Math.PI; head.add(t); }
-  const eyes = [];
-  for (const ex of [-0.075, 0.075]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false }));
-    e.position.set(ex, 0.05, 0.17); head.add(e);
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff3020, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
-    sp.scale.set(0.3, 0.3, 1); sp.position.copy(e.position); sp.renderOrder = 3; head.add(sp); eyes.push(sp);
-  }
-  const mkArm = side => {
-    const pivot = new THREE.Group(); pivot.position.set(side * 0.3, 2.35, 0);
-    const ag = new THREE.CylinderGeometry(0.045, 0.03, 2.0, 6); ag.translate(0, -1.0, 0);
-    pivot.add(new THREE.Mesh(ag, black));
-    for (let f = -1; f <= 1; f++) {
-      const fg = new THREE.ConeGeometry(0.018, 0.36, 5); fg.rotateX(Math.PI); fg.translate(0, -0.18, 0);
-      const fm = new THREE.Mesh(fg, skin); fm.position.set(f * 0.03, -2.0, 0); fm.rotation.z = f * 0.2; pivot.add(fm);
+  const skin = new THREE.MeshStandardMaterial({ color: C(0xa39a8c), roughness: 0.62 });
+  const skinDark = new THREE.MeshStandardMaterial({ color: C(0x5e564c), roughness: 0.8 });
+  const bone = new THREE.MeshStandardMaterial({ color: C(0xe2d8c2), roughness: 0.45 });
+  const gum = new THREE.MeshStandardMaterial({ color: C(0x2a0404), roughness: 0.35 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: C(0x050505), roughness: 0.9, side: THREE.DoubleSide });
+  const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const limb = (r1, r2, len, mat) => { const geo = new THREE.CylinderGeometry(r1, r2, len, 7); geo.translate(0, -len / 2, 0); return new THREE.Mesh(geo, mat); };
+  const joint = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), mat);
+
+  // legs (digitigrade: thigh forward, shin bends back)
+  const legs = [-1, 1].map(side => {
+    const hip = new THREE.Group(); hip.position.set(side * 0.16, 1.5, 0);
+    hip.add(limb(0.075, 0.05, 0.8, skin));
+    const knee = new THREE.Group(); knee.position.y = -0.8; hip.add(knee);
+    knee.add(joint(0.06, skinDark));
+    knee.add(limb(0.05, 0.03, 0.8, skin));
+    for (let t = -1; t <= 1; t++) {
+      const toe = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.2, 5), bone);
+      toe.rotation.x = Math.PI / 2; toe.position.set(t * 0.04, -0.8, 0.1); knee.add(toe);
     }
-    pivot.rotation.z = side * 0.12;
-    return pivot;
-  };
-  const armL = mkArm(-1), armR = mkArm(1);
-  g.add(neck, head, armL, armR);
+    g.add(hip); return { hip, knee };
+  });
+
+  // hunched spine
+  const spine = new THREE.Group(); spine.position.set(0, 1.5, 0); spine.rotation.x = 0.5; g.add(spine);
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.18), skinDark); spine.add(pelvis);
+  const torsoGeo = new THREE.CylinderGeometry(0.23, 0.12, 1.1, 10); torsoGeo.translate(0, 0.55, 0);
+  const torso = new THREE.Mesh(torsoGeo, skin); torso.scale.z = 0.75; spine.add(torso);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), skinDark); belly.scale.set(1, 1.6, 0.5); belly.position.set(0, 0.25, 0.06); spine.add(belly);
+  for (let i = 0; i < 6; i++) { // ribs pushing through the skin
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(0.16 + i * 0.012, 0.014, 4, 14, Math.PI), skinDark);
+    rib.rotation.x = Math.PI / 2; rib.scale.set(1, 0.85, 1); rib.position.set(0, 0.48 + i * 0.09, 0.0); spine.add(rib);
+  }
+  for (let i = 0; i < 9; i++) { const v = joint(0.035, skin); v.position.set(0, 0.1 + i * 0.12, -0.16 - Math.sin(i / 8 * Math.PI) * 0.04); spine.add(v); }
+
+  // arms: shoulder -> upper arm -> elbow -> forearm -> long fingers
+  const arms = [-1, 1].map(side => {
+    const sh = new THREE.Group(); sh.position.set(side * 0.27, 1.05, 0); spine.add(sh);
+    sh.add(joint(0.065, skinDark));
+    sh.add(limb(0.05, 0.035, 0.95, skin));
+    const elbow = new THREE.Group(); elbow.position.y = -0.95; sh.add(elbow);
+    elbow.add(joint(0.045, skinDark));
+    elbow.add(limb(0.035, 0.025, 0.95, skin));
+    const hand = new THREE.Group(); hand.position.y = -0.95; elbow.add(hand);
+    hand.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.1, 0.03), skin));
+    for (let f = 0; f < 4; f++) {
+      const f1 = new THREE.Group(); f1.position.set(-0.035 + f * 0.023, -0.05, 0); f1.rotation.z = (f - 1.5) * 0.12; hand.add(f1);
+      f1.add(limb(0.011, 0.008, 0.2, skin));
+      const f2 = new THREE.Group(); f2.position.y = -0.2; f2.rotation.x = 0.5; f1.add(f2);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.16, 4), bone); claw.rotation.x = Math.PI; claw.position.y = -0.08; f2.add(claw);
+    }
+    return { sh, elbow };
+  });
+
+  // neck & head
+  const neck = new THREE.Group(); neck.position.set(0, 1.12, 0.02); neck.rotation.x = 0.55; spine.add(neck);
+  const neckGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.42, 6); neckGeo.translate(0, 0.21, 0);
+  neck.add(new THREE.Mesh(neckGeo, skin));
+  const head = new THREE.Group(); head.position.y = 0.44; head.rotation.x = -1.05; neck.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 16), skin); skull.scale.set(0.82, 1.28, 0.95); head.add(skull);
+  const eyes = [];
+  for (const ex of [-0.072, 0.072]) {
+    const sock = new THREE.Mesh(new THREE.SphereGeometry(0.058, 10, 10), holeMat);
+    sock.scale.set(1, 1.25, 0.55); sock.position.set(ex, 0.06, 0.155); head.add(sock);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false }));
+    pupil.position.set(ex, 0.055, 0.18); head.add(pupil);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff2a14, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    sp.scale.set(0.13, 0.13, 1); sp.position.set(ex, 0.055, 0.19); sp.renderOrder = 3; head.add(sp); eyes.push(sp);
+  }
+  // mouth: wide grin of teeth, jaw hinges open
+  const cavity = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), gum); cavity.scale.set(1.05, 0.6, 0.6); cavity.position.set(0, -0.1, 0.08); head.add(cavity);
+  const toothGeo = new THREE.ConeGeometry(0.011, 0.055, 4);
+  for (let i = 0; i < 14; i++) {
+    const a = -1.15 + i / 13 * 2.3, t = new THREE.Mesh(toothGeo, bone);
+    t.position.set(Math.sin(a) * 0.135, -0.085, Math.cos(a) * 0.14 + 0.02); t.rotation.x = Math.PI; head.add(t);
+  }
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.07, -0.02); head.add(jaw);
+  const jawBone = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), skin);
+  jawBone.scale.set(0.95, 0.8, 1.15); jawBone.position.set(0, -0.03, 0.06); jaw.add(jawBone);
+  for (let i = 0; i < 12; i++) {
+    const a = -1.05 + i / 11 * 2.1, t = new THREE.Mesh(toothGeo, bone);
+    t.position.set(Math.sin(a) * 0.12, -0.04, Math.cos(a) * 0.13 + 0.07); jaw.add(t);
+  }
+  // lank hair hanging over the face
+  for (let i = 0; i < 26; i++) {
+    const a = rand(-2.4, 2.4), len = rand(0.45, 0.85);
+    const strandGeo = new THREE.PlaneGeometry(rand(0.025, 0.05), len); strandGeo.translate(0, -len / 2, 0);
+    const st = new THREE.Mesh(strandGeo, hairMat);
+    const front = Math.abs(a) < 0.22;
+    st.position.set(Math.sin(a + Math.PI) * 0.15, 0.2, Math.cos(a + Math.PI) * 0.17 * (front ? -1.05 : 1));
+    st.rotation.set(front ? 0.12 : -0.05, a + Math.PI, rand(-0.1, 0.1));
+    head.add(st);
+  }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   g.visible = false; scene.add(g);
-  return { g, head, armL, armR, legL, legR, eyes };
+  return { g, spine, neck, head, jaw, legs, arms, eyes,
+    armL: arms[0].sh, armR: arms[1].sh, legL: legs[0].hip, legR: legs[1].hip };
 })();
 
 const glimpse = new THREE.Group();
@@ -800,6 +858,13 @@ function growl(vol, dur = 1.2, base = 78) {
   noiseBurst(dur, 350, 1, vol * 0.5, 'lowpass');
 }
 function breathSniff(vol) { for (let i = 0; i < 3; i++) noiseBurst(0.18, 1800, 2, vol, 'bandpass', i * 0.22, 900); }
+function crack(vol) { const n = 3 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) noiseBurst(0.012, rand(2500, 5000), 4, vol, 'bandpass', i * rand(0.025, 0.06)); }
+function scratch() { noiseBurst(0.45, 2500, 1.5, 0.22, 'bandpass', 0, 6500); noiseBurst(0.35, 3200, 2, 0.16, 'bandpass', 0.2, 7000); }
+function stinger() {
+  if (!AC) return;
+  [110, 116.5, 164.8, 233].forEach(f => tone(f, 2.6, 0.045, 'sawtooth', f * 0.97, 0, 0.5));
+  tone(1760, 2.4, 0.03, 'sine', 1700, 0, 0.3); tone(1865, 2.4, 0.03, 'sine', 1900, 0, 0.3);
+}
 function screech() {
   if (!AC) return;
   for (let i = 0; i < 6; i++) tone(420 + i * 210, 1.5, 0.13, 'sawtooth', 1700 + i * 190, 0, 0.02);
@@ -883,7 +948,8 @@ let started = false, dead = false, won = false;
 let time = 13.0, day = 1, nights = 0, nightStarted = false, fuel = 60;
 let outsideNightT = 0;
 const MAX_STICKS = 6;
-const M = { state: 'hidden', speed: 3, t: 0, tx: 0, tz: 0, sniffT: 0, sniffDur: 4.5, growlT: 0, stepT: 0, sniffSnd: 0 };
+const M = { state: 'hidden', speed: 3, t: 0, tx: 0, tz: 0, sniffT: 0, sniffDur: 4.5, growlT: 0, stepT: 0, sniffSnd: 0,
+  twT: 0, twHold: 0, tw: new THREE.Vector3(), near: false, whisperT: 0, scratchT: 0, shake: 0 };
 const tentEvt = { timer: 10 };
 const G = { active: false, t: 0, cool: 4, seen: 0 };
 let scareT = 0;
@@ -953,13 +1019,16 @@ function exitTent() {
 
 /* ================= monster logic ================= */
 const mp = monster.g.position;
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+let lightFlicker = 1; // < 1 while the monster is close: flashlight & lantern stutter
 function spawnChase() {
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
   let x = P.x - fx * 30, z = P.z - fz * 30;
   const r = Math.hypot(x, z); if (r > 135) { x *= 135 / r; z *= 135 / r; }
   mp.set(x, H(x, z), z);
-  M.state = 'chase'; M.speed = 3.2 + nights * 0.3; M.growlT = 0;
-  growl(0.5, 1.6); msg('<span style="color:#ff5a5a">뒤에서... 무언가 온다. 텐트로 달려!</span>', 3);
+  M.state = 'chase'; M.speed = 3.2 + nights * 0.3; M.growlT = 0; M.whisperT = 2;
+  stinger(); growl(0.5, 1.6);
+  msg('<span style="color:#ff5a5a">뒤에서... 무언가 온다. 텐트로 달려!</span>', 3);
 }
 function startTentApproach(spawnFar) {
   if (spawnFar) {
@@ -967,7 +1036,8 @@ function startTentApproach(spawnFar) {
     mp.set(x, H(x, z), z);
     msg('...밖에서 발소리가 들린다.', 3);
   }
-  const sides = [Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI * 0.75, -Math.PI * 0.75];
+  // 0 = the door side, so sometimes it stands right in the doorway, staring in
+  const sides = [0, 0, Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI * 0.75, -Math.PI * 0.75];
   const a = sides[Math.floor(Math.random() * sides.length)];
   M.tx = TENT.x + Math.sin(a) * 2.5; M.tz = TENT.z + Math.cos(a) * 2.5;
   M.state = 'approach';
@@ -977,52 +1047,89 @@ function moveTo(tx, tz, speed, dt) {
   const dx = tx - mp.x, dz = tz - mp.z, d = Math.hypot(dx, dz);
   if (d > 0.01) { const s = Math.min(d, speed * dt); mp.x += dx / d * s; mp.z += dz / d * s; }
   mp.y = H(mp.x, mp.z);
+  monster.g.rotation.set(0, 0, 0);
   monster.g.lookAt(tx, mp.y, tz);
   return d;
 }
-function animateMonster(dt, walking, speed) {
-  M.t += dt * (walking ? speed * 1.3 : 1);
+// is the player looking at it? (head roughly in the centre of view)
+function playerSeesMonster(maxDist = 40) {
+  monster.head.getWorldPosition(_v1);
+  const d = _v1.distanceTo(camera.position);
+  _v1.sub(camera.position).normalize();
+  camera.getWorldDirection(_v2);
+  return d < maxDist && _v2.dot(_v1) > 0.86;
+}
+function animateMonster(dt, walking, speed, jawOpen = 0.12) {
+  M.t += dt * (walking ? speed * 1.25 : 1);
   const s = Math.sin(M.t * 2.2);
-  monster.legL.rotation.x = walking ? s * 0.5 : 0;
-  monster.legR.rotation.x = walking ? -s * 0.5 : 0;
-  monster.armL.rotation.x = walking ? -s * 0.45 : Math.sin(M.t * 0.7) * 0.1;
-  monster.armR.rotation.x = walking ? s * 0.45 : Math.sin(M.t * 0.6 + 1) * 0.1;
-  monster.head.rotation.z = Math.sin(M.t * 0.9) * 0.25;
-  monster.g.position.y += walking ? Math.abs(s) * 0.08 : 0;
+  const [L, R] = monster.legs, [AL, AR] = monster.arms;
+  L.hip.rotation.x = -0.4 + (walking ? s * 0.5 : 0);  L.knee.rotation.x = 0.85 + (walking ? Math.max(0, -s) * 0.8 : 0);
+  R.hip.rotation.x = -0.4 - (walking ? s * 0.5 : 0);  R.knee.rotation.x = 0.85 + (walking ? Math.max(0, s) * 0.8 : 0);
+  // arms hang forward from the hunch and drag along
+  AL.sh.rotation.set(-0.55 + (walking ? -s * 0.35 : Math.sin(M.t * 0.7) * 0.06), 0, -0.12);
+  AR.sh.rotation.set(-0.55 + (walking ? s * 0.35 : Math.sin(M.t * 0.6 + 1) * 0.06), 0, 0.12);
+  AL.elbow.rotation.x = -0.25 - (walking ? Math.max(0, s) * 0.3 : 0);
+  AR.elbow.rotation.x = -0.25 - (walking ? Math.max(0, -s) * 0.3 : 0);
+  monster.spine.rotation.set(0.5 + (walking ? Math.abs(s) * 0.06 : Math.sin(M.t * 0.8) * 0.03), 0, Math.sin(M.t * 1.1) * 0.07);
+  // unnatural head twitches: the head snaps to a new angle, holds, then snaps back
+  M.twT -= dt;
+  if (M.twT <= 0) {
+    if (M.twHold > 0) { M.twHold = 0; M.tw.set(0, 0, 0); M.twT = rand(0.4, 2.2) * (M.near ? 0.4 : 1); }
+    else { M.twHold = 1; M.tw.set(rand(-0.35, 0.35), rand(-0.6, 0.6), rand(-0.9, 0.9)); M.twT = rand(0.12, 0.45); if (M.near) crack(0.2); }
+  }
+  monster.head.rotation.set(-1.05 + M.tw.x, M.tw.y, M.tw.z + Math.sin(M.t * 0.9) * 0.12);
+  monster.jaw.rotation.x = jawOpen + Math.sin(M.t * 3.3) * 0.04;
+  monster.g.position.y += walking ? Math.abs(s) * 0.07 : 0;
 }
 
 function updateMonster(dt) {
-  if (M.state === 'hidden') { monster.g.visible = false; return; }
+  lightFlicker = 1;
+  if (M.state === 'hidden') { monster.g.visible = false; if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z); return; }
   monster.g.visible = true;
   const dPlayer = Math.hypot(P.x - mp.x, P.z - mp.z);
+  M.near = dPlayer < 16 || M.state === 'sniff';
+  if (M.near && M.state !== 'watch') lightFlicker = Math.random() < 0.22 ? rand(0, 0.35) : 1;
 
-  if (M.state === 'chase') {
+  if (M.state === 'watch') { // standing between the trees at dusk, just watching
+    mp.y = H(mp.x, mp.z); monster.g.rotation.set(0, 0, 0); monster.g.lookAt(P.x, mp.y, P.z);
+    animateMonster(dt, false, 0, 0.05);
+  } else if (M.state === 'chase') {
     if (P.inTent) { startTentApproach(false); return; }
     M.speed = Math.min(7.0, M.speed + dt * 0.13);
-    moveTo(P.x, P.z, M.speed, dt);
-    animateMonster(dt, true, M.speed);
-    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 2.2 / M.speed; footstep(clamp(0.6 - dPlayer / 50, 0.03, 0.6), true); }
+    // it slows when watched... and rushes when you turn away
+    const seen = playerSeesMonster();
+    const sp = Math.min(7.6, M.speed * (seen ? 0.6 : 1.35));
+    moveTo(P.x, P.z, sp, dt);
+    animateMonster(dt, true, sp, seen ? 0.7 : 0.35);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 2.2 / sp; footstep(clamp(0.6 - dPlayer / 50, 0.03, 0.6), true); }
     M.growlT -= dt; if (M.growlT <= 0) { M.growlT = rand(2.5, 4.5); growl(clamp(0.7 - dPlayer / 45, 0.05, 0.7), 1.1); }
+    M.whisperT -= dt; if (M.whisperT <= 0 && dPlayer < 18) { M.whisperT = rand(2.5, 4); whisper(); }
     if (dPlayer < 1.5) jumpscare('밤에 텐트 밖에 있었다');
   } else if (M.state === 'approach') {
     const d = moveTo(M.tx, M.tz, 2.3, dt);
     animateMonster(dt, true, 2.3);
     M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 0.85; footstep(clamp(0.45 - d / 40, 0.04, 0.45), true); }
     if (d < 0.1) {
-      M.state = 'sniff'; M.sniffT = 0; M.sniffDur = rand(4, 5.5) + nights * 0.5; M.sniffSnd = 0;
-      monster.g.lookAt(TENT.x, mp.y, TENT.z);
-      growl(0.35, 1.4, 60);
+      M.state = 'sniff'; M.sniffT = 0; M.sniffDur = rand(5, 7) + nights * 0.8; M.sniffSnd = 0; M.scratchT = 1;
+      stinger(); growl(0.35, 1.4, 60);
     }
   } else if (M.state === 'sniff') {
     M.sniffT += dt;
-    animateMonster(dt, false, 0);
-    mp.y = H(mp.x, mp.z) - 0.85;
-    monster.g.lookAt(TENT.x, mp.y, TENT.z); monster.g.rotateX(0.35);
-    monster.head.rotation.x = Math.sin(M.sniffT * 3) * 0.2 + 0.3;
-    monster.armR.rotation.x = -0.6 - Math.sin(M.sniffT * 2) * 0.2;
-    M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.25); }
+    // crouch at the tent wall, press its face to the fabric, drag claws down it
+    mp.y = H(mp.x, mp.z) - 0.55;
+    monster.g.rotation.set(0, 0, 0); monster.g.lookAt(TENT.x, mp.y, TENT.z);
+    animateMonster(dt, false, 0, 0.25 + Math.max(0, Math.sin(M.sniffT * 1.3)) * 0.6);
+    monster.spine.rotation.x = 0.95;
+    monster.head.rotation.x = -1.35 + Math.sin(M.sniffT * 3) * 0.12;
+    monster.arms[1].sh.rotation.set(-1.5 - Math.sin(M.sniffT * 1.7) * 0.35, 0, 0.35);
+    monster.arms[1].elbow.rotation.x = -0.2;
+    monster.arms[0].sh.rotation.set(-1.25 + Math.sin(M.sniffT * 1.3) * 0.25, 0, -0.35);
+    M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.28); }
+    M.scratchT -= dt; if (M.scratchT <= 0) { M.scratchT = rand(1.2, 2.2); scratch(); M.shake = 0.5; }
+    M.shake = Math.max(0, (M.shake || 0) - dt);
+    if (tentGroup) tentGroup.position.set(TENT.x + rand(-1, 1) * 0.025 * M.shake, 0, TENT.z + rand(-1, 1) * 0.025 * M.shake);
     if (M.sniffT >= M.sniffDur) {
-      hidePrompt(); M.state = 'leave';
+      M.state = 'leave'; if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z);
       const a = Math.random() * 6.28; M.tx = TENT.x + Math.cos(a) * 26; M.tz = TENT.z + Math.sin(a) * 26;
       msg('...발소리가 멀어진다.', 3);
       tentEvt.timer = rand(8, 14);
@@ -1045,24 +1152,21 @@ function updateTentEvents(dt) {
   }
 }
 
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+// at dusk it shows itself far off between the trees, and vanishes once you stare at it
 function updateGlimpse(dt) {
   const evening = time >= 18.6 && time < 20 && !P.inTent;
   if (!G.active) {
-    if (evening) { G.cool -= dt; if (G.cool <= 0) {
-      const a = P.yaw + rand(-1.3, 1.3), d = rand(28, 42);
+    if (evening && M.state === 'hidden') { G.cool -= dt; if (G.cool <= 0) {
+      const a = P.yaw + rand(-1.3, 1.3), d = rand(24, 36);
       const x = P.x - Math.sin(a) * d, z = P.z - Math.cos(a) * d;
-      glimpse.position.set(x, H(x, z) + 2.4, z);
-      glimpse.lookAt(P.x, glimpse.position.y, P.z);
-      glimpse.visible = true; G.active = true; G.t = 0; G.seen = 0;
+      mp.set(x, H(x, z), z); M.state = 'watch';
+      G.active = true; G.t = 0; G.seen = 0;
     } }
     return;
   }
   G.t += dt;
-  _v1.subVectors(glimpse.position, camera.position).normalize();
-  camera.getWorldDirection(_v2);
-  if (_v2.dot(_v1) > 0.96) { G.seen += dt; if (G.seen > 0.7) { glimpse.visible = false; G.active = false; G.cool = rand(6, 10); whisper(); } }
-  if (G.t > 8 || !evening) { glimpse.visible = false; G.active = false; G.cool = rand(5, 9); }
+  if (playerSeesMonster(60)) { G.seen += dt; if (G.seen > 0.9) { M.state = 'hidden'; G.active = false; G.cool = rand(7, 11); whisper(); crack(0.3); } }
+  if (G.t > 9 || !evening) { if (M.state === 'watch') M.state = 'hidden'; G.active = false; G.cool = rand(5, 9); }
 }
 
 /* ================= jumpscare ================= */
@@ -1097,27 +1201,37 @@ function starve() {
 }
 function jumpscare(reason) {
   if (dead) return; dead = true; scareT = 0;
-  hidePrompt(); $('touch').classList.remove('on');
-  vm.visible = false;
+  $('touch').classList.remove('on'); vm.visible = false;
+  if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z);
+  M.state = 'scare'; monster.g.visible = true;
+  P.pitch = 0; camera.rotation.set(0, P.yaw, 0); camera.updateMatrixWorld();
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
-  monster.g.visible = true;
+  // pose: arms flung up, jaw unhinged, face level with yours
   monster.g.rotation.set(0, 0, 0);
-  mp.set(camera.position.x + fx * 0.85, camera.position.y - 2.9, camera.position.z + fz * 0.85);
-  monster.g.lookAt(camera.position.x, mp.y, camera.position.z);
-  monster.head.rotation.set(0.1, 0, 0);
-  monster.armL.rotation.set(-1.9, 0, -0.5); monster.armR.rotation.set(-1.9, 0, 0.5);
-  P.pitch = 0;
-  screech();
+  mp.set(camera.position.x + fx * 1.2, 0, camera.position.z + fz * 1.2);
+  monster.g.lookAt(camera.position.x, 0, camera.position.z);
+  monster.spine.rotation.set(0.35, 0, 0);
+  monster.head.rotation.set(-0.9, 0, 0);
+  monster.jaw.rotation.x = 0.95;
+  monster.arms[0].sh.rotation.set(-2.4, 0, -0.7); monster.arms[1].sh.rotation.set(-2.4, 0, 0.7);
+  monster.arms[0].elbow.rotation.x = -0.7; monster.arms[1].elbow.rotation.x = -0.7;
+  monster.g.updateMatrixWorld(true);
+  monster.head.getWorldPosition(_v3);
+  mp.x += camera.position.x + fx * 0.5 - _v3.x;
+  mp.y += camera.position.y - 0.03 - _v3.y;
+  mp.z += camera.position.z + fz * 0.5 - _v3.z;
+  camera.fov = 58; camera.updateProjectionMatrix();
+  screech(); crack(0.5);
   $('flash').style.transition = 'none'; $('flash').style.opacity = 0.8;
   requestAnimationFrame(() => { $('flash').style.transition = 'opacity .4s'; $('flash').style.opacity = 0; });
-  setTimeout(() => { drawFace(); $('face').classList.add('on'); }, 700);
+  setTimeout(() => { drawFace(); $('face').classList.add('on'); }, 800);
   setTimeout(() => {
     $('face').classList.remove('on');
     if (document.exitPointerLock) document.exitPointerLock();
     $('overText').innerHTML = `${reason}.<br>${day}일차 밤 · 버틴 밤 ${nights}/3`;
     $('over').classList.remove('hidden');
     if (AC) master.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4);
-  }, 2100);
+  }, 2200);
 }
 function drawFace() {
   const c = $('face'), w = c.width = innerWidth, h = c.height = innerHeight, x = c.getContext('2d');
@@ -1285,10 +1399,10 @@ function updateEnv(dt) {
   moonGroup.visible = s < 0.85;
   stars.position.copy(center);
   stars.material.opacity = clamp(1 - s * 1.6, 0, 1) * (0.8 + Math.sin(gameT * 3) * 0.1); stars.visible = s < 0.7;
-  flash.intensity = P.flash ? 3.2 : 0;
+  flash.intensity = P.flash ? 3.2 * lightFlicker : 0;
   beam.material.opacity = P.flash ? 0.008 + (1 - s) * 0.018 : 0;
-  lantern.intensity = P.inTent ? 1.4 : 0;
-  tentMat.opacity = P.inTent ? 0.8 : 0.97;
+  lantern.intensity = P.inTent ? 1.4 * (0.4 + 0.6 * lightFlicker) : 0;
+  tentMat.opacity = P.inTent ? (M.state === 'sniff' ? 0.68 : 0.8) : 0.97;
   grassUniforms.uTime.value = gameT;
 
   // fire
@@ -1411,6 +1525,7 @@ function frame() {
       scareT += dt;
       camera.rotation.set(rand(-0.03, 0.03), P.yaw + rand(-0.03, 0.03), rand(-0.05, 0.05));
       monster.head.rotation.z = Math.sin(scareT * 40) * 0.3;
+      monster.jaw.rotation.x = 0.85 + Math.sin(scareT * 55) * 0.12;
     }
     updateEnv(dt); updateDanger(); updateHUD(dt);
   } else if (!started) {
@@ -1434,7 +1549,7 @@ $('startBtn').addEventListener('click', () => {
   msg('캠핑장에 도착했다. 밤 8시 전에는 반드시 <b>텐트</b>로 돌아와야 한다.', 6);
 });
 
-if (DEBUG) window.__dbg = { P, M, enterTent, eat, get hunger() { return hunger; }, set hunger(v) { hunger = v; }, get food() { return food; }, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
+if (DEBUG) window.__dbg = { P, M, monster, enterTent, eat, get hunger() { return hunger; }, set hunger(v) { hunger = v; }, get food() { return food; }, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
 const qt = parseFloat(new URLSearchParams(location.search).get('t'));
 if (!isNaN(qt)) $('startBtn').addEventListener('click', () => { time = qt; });
 })();
