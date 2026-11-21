@@ -58,7 +58,7 @@
   #tE { right:24px; bottom:110px; width:76px; height:76px; font-size:15px; }
   #tB { right:112px; bottom:40px; }
   #tR { right:24px; bottom:24px; }
-  #tF { right:112px; bottom:124px; width:54px; height:54px; font-size:11px; }
+  #tF { right:112px; bottom:40px; }
 </style>
 </head>
 <body>
@@ -66,16 +66,13 @@
   <div id="clock">1일차 · 13:00</div>
   <div id="phase">낮</div>
   <div class="bar"><span>체력</span><div><i id="staBar"></i></div></div>
-  <div class="bar"><span>숨</span><div><i id="brBar"></i></div></div>
   <div id="info"></div>
 </div>
 <div id="cross"></div>
 <div id="hint"></div>
 <div id="msg"></div>
-<div id="prompt">숨을 참아라!<small id="promptSub">SPACE 꾹 누르기</small></div>
 <div id="vignette"></div>
 <div id="danger"></div>
-<div id="breathShade"></div>
 <div id="grain"></div>
 <canvas id="face"></canvas>
 <div id="flash"></div>
@@ -83,7 +80,6 @@
 <div id="touch">
   <div id="joyBase"><div id="joyKnob"></div></div>
   <div class="tbtn" id="tE">행동</div>
-  <div class="tbtn" id="tB">숨<br>참기</div>
   <div class="tbtn" id="tR">달리기</div>
   <div class="tbtn" id="tF">손전등</div>
 </div>
@@ -100,7 +96,7 @@
   </div>
   <div class="ctrl" id="ctrlText">
     WASD 이동 · 마우스 시점 · Shift 달리기 · E 텐트 들어가기/나가기<br>
-    F 손전등 · <b style="color:#7ab8e8">SPACE 꾹 = 숨 참기(입 막기)</b> · 헤드폰 권장 🎧
+    F 손전등 · 헤드폰 권장 🎧
   </div>
   <button class="btn" id="startBtn">캠핑 시작</button>
 </div>
@@ -138,8 +134,7 @@ const smoothstep = (a, b, x) => smooth01((x - a) / (b - a));
 const C = hex => new THREE.Color(hex).convertSRGBToLinear();
 
 if (isTouch) {
-  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · <b style="color:#7ab8e8">숨 참기 버튼 꾹(입 막기)</b> · 헤드폰 권장 🎧';
-  $('promptSub').textContent = '숨 참기 버튼 꾹 누르기';
+  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · 헤드폰 권장 🎧';
 }
 
 /* ================= renderer ================= */
@@ -788,7 +783,6 @@ const keys = {};
 let touchMove = { x: 0, y: 0 }, touchBreath = false, touchRun = false, locked = false;
 addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyE' && !e.repeat) interact();
   if (e.code === 'KeyF' && !e.repeat) toggleFlash();
 });
@@ -815,7 +809,6 @@ if (isTouch) {
     el.addEventListener('touchcancel', () => { el.classList.remove('act'); up && up(); });
   };
   btn('tE', interact); btn('tF', toggleFlash);
-  btn('tB', () => touchBreath = true, () => touchBreath = false);
   btn('tR', () => touchRun = true, () => touchRun = false);
   addEventListener('touchstart', e => {
     if (!started) return;
@@ -944,8 +937,7 @@ function startTentApproach(spawnFar) {
   M.tx = TENT.x + Math.sin(a) * 2.5; M.tz = TENT.z + Math.cos(a) * 2.5;
   M.state = 'approach';
 }
-function showPrompt() { $('prompt').style.display = 'block'; }
-function hidePrompt() { $('prompt').style.display = 'none'; $('prompt').classList.remove('ok'); }
+function hidePrompt() {}
 function moveTo(tx, tz, speed, dt) {
   const dx = tx - mp.x, dz = tz - mp.z, d = Math.hypot(dx, dz);
   if (d > 0.01) { const s = Math.min(d, speed * dt); mp.x += dx / d * s; mp.z += dz / d * s; }
@@ -963,7 +955,6 @@ function animateMonster(dt, walking, speed) {
   monster.head.rotation.z = Math.sin(M.t * 0.9) * 0.25;
   monster.g.position.y += walking ? Math.abs(s) * 0.08 : 0;
 }
-const holding = () => keys.Space || touchBreath;
 
 function updateMonster(dt) {
   if (M.state === 'hidden') { monster.g.visible = false; return; }
@@ -995,7 +986,6 @@ function updateMonster(dt) {
     monster.head.rotation.x = Math.sin(M.sniffT * 3) * 0.2 + 0.3;
     monster.armR.rotation.x = -0.6 - Math.sin(M.sniffT * 2) * 0.2;
     M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.25); }
-    $('prompt').classList.toggle('ok', !!holding());
     if (M.sniffT >= M.sniffDur) {
       hidePrompt(); M.state = 'leave';
       const a = Math.random() * 6.28; M.tx = TENT.x + Math.cos(a) * 26; M.tz = TENT.z + Math.sin(a) * 26;
@@ -1126,11 +1116,6 @@ function win() {
 const TENT_HALF = 0.72; // how far you can crawl from the tent centre (walls slope in)
 function updatePlayer(dt) {
   P.pitch = clamp(P.pitch, -1.35, 1.35);
-  if (holding() && P.gasping <= 0) {
-    P.breath -= dt / 6.5;
-    if (P.breath <= 0) { P.breath = 0; P.gasping = 1.6; gasp(); }
-  } else P.breath = Math.min(1, P.breath + dt / 3.5);
-  if (P.gasping > 0) P.gasping -= dt;
 
   let f = 0, s = 0;
   if (keys.KeyW || keys.ArrowUp) f += 1;
@@ -1187,17 +1172,15 @@ function updateViewModel(dt) {
   const sprintTilt = P.sprint ? 1 : 0;
   rightHand.position.set(RH_BASE.x + VM.swayX + bx, RH_BASE.y + VM.swayY - by + breathe - sprintTilt * 0.05 - VM.flashT * 0.15, RH_BASE.z + VM.flashT * 0.1);
   rightHand.rotation.set(0.06 + sprintTilt * 0.3 + VM.swayY, 0.05 + VM.swayX * 2, sprintTilt * -0.2);
-  // left hand: hidden, holding sticks, or covering mouth while holding breath
+  // left hand: only shown while holding sticks
   let target = LH_HIDE;
-  if (holding() && P.gasping <= 0) target = LH_MOUTH;
-  else if (P.sticks > 0 || VM.pickT > 0) target = LH_BASE;
+  if (P.sticks > 0 || VM.pickT > 0) target = LH_BASE;
   leftHand.position.lerp(target, dt * 9);
   leftHand.position.x += VM.swayX - bx; leftHand.position.y += VM.swayY * 0.5;
   const toMouth = target === LH_MOUTH;
   leftHand.rotation.set(toMouth ? 0.9 : 0.1 - VM.pickT * 1.2, toMouth ? 0.4 : -0.1, toMouth ? 1.3 : 0.1);
   bundle.visible = P.sticks > 0 && !toMouth;
   bundle.children.forEach((c, i) => { c.visible = i < P.sticks; });
-  $('breathShade').style.opacity = toMouth ? 0.7 : 0;
   // flashlight
   flashModel.userData.lens.emissiveIntensity = P.flash ? 3 : 0;
 }
@@ -1333,7 +1316,6 @@ function updateHUD(dt) {
   $('phase').textContent = isNight() ? '밤 — 텐트 안에 있을 것' : time >= 17.5 ? '해질녘' : time < 7 ? '새벽' : '낮';
   $('phase').style.color = isNight() ? '#ff7a7a' : time >= 17.5 ? '#ffb27a' : '';
   $('staBar').style.width = (P.stamina * 100) + '%';
-  $('brBar').style.width = (P.breath * 100) + '%';
   $('info').innerHTML = `🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
   const a = (dead || won) ? null : currentAction();
   const h = $('hint');
