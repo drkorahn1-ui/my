@@ -69,7 +69,7 @@ button.go:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
   <div class="card" id="card">
     <div class="eyebrow">noclip · 현실 밖으로</div>
     <h1>LEVEL 0</h1>
-    <p>눅눅한 카펫, 끝없이 이어지는 노란 벽지, 형광등이 웅웅거리는 소리. 어딘가에 <b style="color:var(--exit)">EXIT</b> 표지판이 달린 문이 있다. 오래 머물수록 무언가가 다가온다.</p>
+    <p>눅눅한 카펫, 끝없이 이어지는 노란 벽지, 형광등이 웅웅거리는 소리. 어딘가에 <b style="color:var(--exit)">EXIT</b> 표지판이 달린 문이 있다. 여기엔 아무도 없다. 오직 당신뿐.</p>
     <div class="keys" id="keysDesk">
       <b>WASD</b><span>이동</span>
       <b>마우스</b><span>둘러보기</span>
@@ -323,6 +323,7 @@ entity.visible = false; scene.add(entity);
 
 // ---------- state ----------
 const player = { x: S / 2, z: S / 2, yaw: Math.PI * 0.25, pitch: 0, stam: 1, bob: 0, walked: 0 };
+const MONSTER = false; // set true to bring the entity back
 let state = 'title', elapsed = 0, ent = { active: false, x: 0, z: 0, speed: 2.4 };
 const keys = {};
 let running = false;
@@ -513,7 +514,7 @@ function update(dt) {
   if (Math.floor(elapsed) === 20 && msgT <= 0 && !flashMsg.d1) { flashMsg.d1 = 1; flashMsg('초록색 EXIT 표지판을 찾아라'); }
 
   // entity
-  if (!ent.active && elapsed > 25) {
+  if (MONSTER && !ent.active && elapsed > 25) {
     // appear in front of the player, in plain view, and stare before chasing
     // pick the direction near the view centre with the longest clear sight line
     let best = { a: player.yaw, d: 3 };
