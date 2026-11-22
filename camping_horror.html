@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>캠핑의 밤</title>
+<style>
+  :root { --fg:#e8dccb; --accent:#ff6a2b; --danger:#c3141c; }
+  * { box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#000; color:var(--fg);
+    font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif; touch-action:none; }
+  canvas#game { display:block; }
+  #hud { position:fixed; top:12px; left:12px; font-size:13px; text-shadow:0 1px 3px #000; pointer-events:none; z-index:5; width:200px; }
+  #clock { font-size:20px; font-weight:700; letter-spacing:1px; }
+  #phase { font-size:12px; opacity:.8; margin-bottom:8px; }
+  .bar { display:flex; align-items:center; gap:6px; margin:4px 0; }
+  .bar span { width:44px; font-size:11px; opacity:.85; }
+  .bar div { flex:1; height:6px; background:rgba(255,255,255,.12); border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:50%; background:var(--accent); transition:width .15s; }
+  #staBar { background:#9bd17a !important; } #brBar { background:#7ab8e8 !important; }
+  #info { margin-top:6px; font-size:12px; line-height:1.6; }
+  #cross { position:fixed; left:50%; top:50%; width:4px; height:4px; margin:-2px 0 0 -2px; border-radius:50%; background:rgba(255,255,255,.5); z-index:5; pointer-events:none; }
+  #hint { position:fixed; left:50%; bottom:24%; transform:translateX(-50%); font-size:15px; padding:6px 14px; background:rgba(0,0,0,.45); border-radius:6px; opacity:0; transition:opacity .2s; z-index:5; pointer-events:none; white-space:nowrap; }
+  #msg { position:fixed; left:50%; top:22%; transform:translateX(-50%); width:min(90vw,640px); text-align:center; font-size:18px; line-height:1.5; text-shadow:0 2px 6px #000; opacity:0; transition:opacity .6s; z-index:6; pointer-events:none; }
+  #prompt { position:fixed; left:50%; top:58%; transform:translate(-50%,-50%); font-size:34px; font-weight:800; color:#fff; text-align:center; text-shadow:0 0 12px var(--danger),0 0 30px var(--danger); display:none; z-index:7; pointer-events:none; animation:pulse .5s infinite alternate; }
+  #prompt small { display:block; font-size:14px; font-weight:400; opacity:.9; margin-top:4px; }
+  #prompt.ok { color:#bfe3ff; text-shadow:0 0 12px #2a6fb0; animation:none; }
+  @keyframes pulse { from{transform:translate(-50%,-50%) scale(1)} to{transform:translate(-50%,-50%) scale(1.08)} }
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:3; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.85) 100%); }
+  #vignette.off { display:none; }
+  #danger { position:fixed; inset:0; pointer-events:none; z-index:3; opacity:0; background:radial-gradient(ellipse at center, rgba(120,0,0,0) 35%, rgba(150,0,0,.85) 100%); }
+  #breathShade { position:fixed; inset:0; pointer-events:none; z-index:3; opacity:0; transition:opacity .3s; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 25%, rgba(0,0,0,.9) 90%); }
+  #grain { position:fixed; inset:-50%; pointer-events:none; z-index:4; opacity:.06; animation:grain .4s steps(4) infinite; }
+  @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-7%,4%)} 50%{transform:translate(5%,-6%)} 75%{transform:translate(-3%,8%)} 100%{transform:translate(6%,2%)} }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:9; }
+  #face { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:8; pointer-events:none; }
+  #face.on { display:block; animation:shake .06s infinite; }
+  @keyframes shake { 0%{transform:translate(4px,-6px) scale(1.05)} 50%{transform:translate(-6px,5px) scale(1.08)} 100%{transform:translate(3px,4px) scale(1.04)} }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:20; background:radial-gradient(ellipse at center,rgba(22,12,6,.55) 0%,rgba(0,0,0,.92) 80%); }
+  .screen.hidden { display:none; }
+  .screen h1 { font-size:clamp(36px,9vw,72px); margin:0 0 6px; letter-spacing:6px; color:#f1e3cf; text-shadow:0 0 24px rgba(255,90,30,.5); }
+  .screen .sub { opacity:.75; margin-bottom:22px; font-size:15px; }
+  .screen .story { max-width:520px; line-height:1.8; font-size:15px; opacity:.9; margin-bottom:18px; }
+  .screen .story b { color:#ff8a5a; }
+  .screen .ctrl { font-size:13px; opacity:.7; line-height:1.8; margin-bottom:22px; max-width:520px; }
+  .btn { font:inherit; font-size:18px; padding:12px 34px; border:1px solid #ff6a2b; background:rgba(255,106,43,.12); color:#ffd9c4; border-radius:8px; cursor:pointer; letter-spacing:2px; }
+  .btn:hover { background:rgba(255,106,43,.3); }
+  #over { background:radial-gradient(ellipse at center,#160606 0%,#000 75%); }
+  #over h1 { color:#d42b2b; text-shadow:0 0 30px #900; }
+  #win h1 { color:#ffe2a6; }
+  #pause { background:rgba(0,0,0,.6); font-size:20px; cursor:pointer; }
+  #touch { display:none; position:fixed; inset:0; z-index:10; pointer-events:none; }
+  #touch.on { display:block; }
+  #joyBase { position:absolute; width:120px; height:120px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.05); left:30px; bottom:40px; }
+  #joyKnob { position:absolute; width:50px; height:50px; border-radius:50%; background:rgba(255,255,255,.3); left:35px; top:35px; }
+  .tbtn { position:absolute; pointer-events:auto; width:66px; height:66px; border-radius:50%; border:2px solid rgba(255,255,255,.3); background:rgba(0,0,0,.35); color:#fff; font-size:13px; display:flex; align-items:center; justify-content:center; text-align:center; line-height:1.1; }
+  .tbtn.act { background:rgba(255,106,43,.45); }
+  #tE { right:24px; bottom:110px; width:76px; height:76px; font-size:15px; }
+  #tB { right:112px; bottom:40px; }
+  #tR { right:24px; bottom:24px; }
+  #tF { right:112px; bottom:40px; }
+  #tQ { right:112px; bottom:124px; display:none; }
+  #tQ.show { display:flex; }
+  #hgBar { background:#e0b44a !important; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="clock">1일차 · 13:00</div>
+  <div id="phase">낮</div>
+  <div class="bar"><span>체력</span><div><i id="staBar"></i></div></div>
+  <div class="bar"><span>배고픔</span><div><i id="hgBar"></i></div></div>
+  <div id="info"></div>
+</div>
+<div id="cross"></div>
+<div id="hint"></div>
+<div id="msg"></div>
+<div id="vignette"></div>
+<div id="danger"></div>
+<div id="grain"></div>
+<canvas id="face"></canvas>
+<div id="flash"></div>
+
+<div id="touch">
+  <div id="joyBase"><div id="joyKnob"></div></div>
+  <div class="tbtn" id="tE">행동</div>
+  <div class="tbtn" id="tR">달리기</div>
+  <div class="tbtn" id="tF">손전등</div>
+  <div class="tbtn" id="tQ">먹기</div>
+</div>
+
+<div id="intro" class="screen">
+  <h1>캠핑의 밤</h1>
+  <div class="sub">1인칭 3D 생존 공포 게임</div>
+  <div class="story">
+    외딴 숲속의 캠핑장. 관리인이 떠나며 남긴 말은 하나뿐이었다.<br>
+    <b>“밤이 되면, 무슨 일이 있어도 텐트 안에 있어라.”</b><br><br>
+    낮에는 숲을 둘러봐도 좋다. 모닥불은 꺼지지 않는다.<br>
+    밤이 되면 <b>그것</b>이 나온다. 하지만 <b>텐트 안에서는 절대 잡히지 않는다.</b><br>
+    텐트에는 <b>음식이 110개</b> 있다. 배가 고프면 텐트 안에서 먹어라.<br>
+    <b>세 번의 밤</b>을 버티면 구조대가 온다.
+  </div>
+  <div class="ctrl" id="ctrlText">
+    WASD 이동 · 마우스 시점 · Shift 달리기 · E 텐트 들어가기/나가기<br>
+    Q 음식 먹기(텐트 안) · 
+    F 손전등 · 헤드폰 권장 🎧
+  </div>
+  <button class="btn" id="startBtn">캠핑 시작</button>
+</div>
+<div id="over" class="screen hidden">
+  <h1>잡혔다</h1>
+  <div class="sub" id="overText"></div>
+  <button class="btn" onclick="location.reload()">다시 하기</button>
+</div>
+<div id="win" class="screen hidden">
+  <h1>아침이 왔다</h1>
+  <div class="story">세 번째 밤이 끝났다. 멀리서 구조대 차량의 사이렌이 들린다.<br>숲 가장자리, 나무 사이에서 무언가가 끝까지 너를 지켜보고 있었다.</div>
+  <button class="btn" onclick="location.reload()">다시 하기</button>
+</div>
+<div id="pause" class="screen hidden">일시정지 — 클릭하여 계속</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const HQ = !isTouch; // desktop gets the heavier effects
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const smoothstep = (a, b, x) => smooth01((x - a) / (b - a));
+const C = hex => new THREE.Color(hex).convertSRGBToLinear();
+
+if (isTouch) {
+  $('ctrlText').innerHTML = '왼쪽 조이스틱 이동 · 오른쪽 화면 드래그 시점<br>행동 버튼(텐트 들어가기/나가기) · 먹기 버튼(텐트 안) · 헤드폰 권장 🎧';
+}
+
+/* ================= renderer ================= */
+const renderer = new THREE.WebGLRenderer({ antialias: HQ, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, HQ ? 1.5 : 1));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.domElement.id = 'game';
+document.body.prepend(renderer.domElement);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0.02);
+const camera = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, 0.05, 700);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+
+/* post-processing: bloom + chromatic aberration + vignette + sRGB */
+let composer = null, finalPass = null, bloomPass = null;
+if (THREE.EffectComposer && THREE.UnrealBloomPass && THREE.ShaderPass) {
+  composer = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  const bs = HQ ? 1 : 0.5;
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth * bs, innerHeight * bs), 0.85, 0.55, 0.72);
+  composer.addPass(bloomPass);
+  finalPass = new THREE.ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uCA: { value: 0.004 }, uVig: { value: 0.8 }, uTime: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `
+      uniform sampler2D tDiffuse; uniform float uCA; uniform float uVig; uniform float uTime; varying vec2 vUv;
+      vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4))-0.055, step(0.0031308, c)); }
+      void main(){
+        vec2 d = vUv - 0.5; float r = length(d);
+        vec2 off = d * uCA * (0.5 + r);
+        vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+        col = toSRGB(clamp(col, 0.0, 1.0));
+        col *= 1.0 - smoothstep(0.3, 0.85, r) * uVig;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  composer.addPass(finalPass);
+  $('vignette').classList.add('off');
+} else {
+  renderer.outputEncoding = THREE.sRGBEncoding;
+}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (composer) composer.setSize(innerWidth, innerHeight);
+});
+
+/* ================= procedural textures ================= */
+function canvasTex(w, h, draw, repeat, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.encoding = THREE.sRGBEncoding;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  t.anisotropy = maxAniso;
+  return t;
+}
+function glowTex(inner, mid) {
+  return canvasTex(64, 64, (x) => {
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, inner); g.addColorStop(0.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  }, null, false);
+}
+const eyeTex = glowTex('rgba(255,250,235,1)', 'rgba(255,40,20,0.85)');
+const fireTex = glowTex('rgba(255,240,190,1)', 'rgba(255,110,25,0.8)');
+const softTex = canvasTex(128, 128, (x) => {
+  for (let i = 0; i < 14; i++) {
+    const cx = rand(35, 93), cy = rand(40, 88), r = rand(18, 40);
+    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  }
+}, null, false);
+const groundTex = canvasTex(512, 512, (x, w, h) => {
+  x.fillStyle = '#4a4a2c'; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9000; i++) {
+    const g = Math.random();
+    x.fillStyle = g < 0.45 ? `hsl(${rand(70, 100)},${rand(25, 45)}%,${rand(14, 28)}%)` : g < 0.8 ? `hsl(${rand(25, 40)},${rand(20, 35)}%,${rand(14, 26)}%)` : `hsl(40,10%,${rand(25, 40)}%)`;
+    const s = rand(1, 4); x.globalAlpha = rand(0.3, 0.9);
+    x.fillRect(Math.random() * w, Math.random() * h, s, s * rand(0.5, 3));
+  }
+  x.globalAlpha = 1;
+}, [90, 90]);
+const barkTex = canvasTex(128, 256, (x, w, h) => {
+  x.fillStyle = '#3b2a1e'; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 260; i++) {
+    x.strokeStyle = `rgba(${rand(10, 40)},${rand(6, 25)},${rand(2, 12)},${rand(0.4, 0.9)})`; x.lineWidth = rand(1, 4);
+    const px = Math.random() * w; x.beginPath(); x.moveTo(px, Math.random() * h); x.lineTo(px + rand(-3, 3), Math.random() * h); x.stroke();
+  }
+  for (let i = 0; i < 80; i++) { x.fillStyle = `rgba(110,90,70,${rand(0.1, 0.3)})`; x.fillRect(Math.random() * w, Math.random() * h, rand(2, 6), rand(6, 20)); }
+}, [1, 3]);
+const fabricTex = canvasTex(256, 256, (x, w, h) => {
+  x.fillStyle = '#c8682c'; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < w; i += 2) { x.fillStyle = `rgba(0,0,0,${rand(0.02, 0.07)})`; x.fillRect(i, 0, 1, h); x.fillRect(0, i, w, 1); }
+  x.fillStyle = 'rgba(60,20,5,.35)'; x.fillRect(0, h * 0.48, w, 4); x.fillRect(w * 0.48, 0, 4, h);
+  for (let i = 0; i < 25; i++) { x.fillStyle = `rgba(40,25,10,${rand(0.05, 0.15)})`; x.beginPath(); x.arc(rand(0, w), rand(h * .5, h), rand(5, 25), 0, 7); x.fill(); }
+}, [2, 2]);
+const beamTex = canvasTex(4, 128, (x, w, h) => {
+  const g = x.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.35, '#888'); g.addColorStop(1, '#000');
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+}, null, false);
+(function grain() {
+  const c = document.createElement('canvas'); c.width = c.height = 160;
+  const x = c.getContext('2d'); const d = x.createImageData(160, 160);
+  for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  x.putImageData(d, 0, 0);
+  $('grain').style.background = `url(${c.toDataURL()})`;
+})();
+
+/* ================= sky dome ================= */
+const skyU = { top: { value: C(0x4a78b5) }, horizon: { value: C(0xa9c4dc) }, bottom: { value: C(0x1a1a14) } };
+const sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), new THREE.ShaderMaterial({
+  uniforms: skyU, side: THREE.BackSide, depthWrite: false, fog: false,
+  vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 bottom; varying vec3 vP;
+    void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(horizon, top, pow(smoothstep(0.0, 0.6, h), 0.7)) : mix(horizon, bottom, smoothstep(0.0, 0.15, -h));
+    gl_FragColor = vec4(c, 1.0);
+    #include <tonemapping_fragment>
+    #include <encodings_fragment>
+    }`
+}));
+sky.renderOrder = -1;
+scene.add(sky);
+
+/* ================= terrain ================= */
+function H(x, z) {
+  const k = smoothstep(10, 30, Math.hypot(x, z));
+  return k * (Math.sin(x * 0.05) * 1.6 + Math.cos(z * 0.07) * 1.3 + Math.sin((x + z) * 0.13) * 0.5 + Math.sin(x * 0.21 - z * 0.17) * 0.3);
+}
+{
+  const g = new THREE.PlaneGeometry(440, 440, 170, 170);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position, cols = [];
+  const tmp = new THREE.Color(), dirt = C(0x8a6a4a), moss = C(0x9aa070), base = C(0xffffff);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, H(x, z));
+    const n = (Math.sin(x * 0.11) * Math.cos(z * 0.09) + Math.sin(x * 0.031 + z * 0.047)) * 0.25 + 0.5;
+    tmp.copy(base).lerp(moss, n * 0.6);
+    const r = Math.hypot(x, z); if (r < 8) tmp.lerp(dirt, smoothstep(8, 3, r));
+    tmp.multiplyScalar(rand(0.85, 1.05));
+    cols.push(tmp.r, tmp.g, tmp.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.computeVertexNormals();
+  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: groundTex, vertexColors: true, roughness: 1, metalness: 0 }));
+  ground.receiveShadow = true;
+  scene.add(ground);
+}
+
+/* ================= vegetation ================= */
+const obstacles = [];
+const treeSpots = [];
+const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 1, color: 0xffffff });
+{
+  const N = HQ ? 520 : 380;
+  const trunkGeo = new THREE.CylinderGeometry(0.16, 0.34, 1, 7); trunkGeo.translate(0, 0.5, 0);
+  const leafGeo = new THREE.ConeGeometry(1, 1, 10, 3);
+  { // jitter and droop the cone so pines look natural
+    const pp = leafGeo.attributes.position;
+    for (let i = 0; i < pp.count; i++) {
+      const y = pp.getY(i); if (y > 0.49) continue;
+      const k = rand(0.82, 1.18); pp.setX(i, pp.getX(i) * k); pp.setZ(i, pp.getZ(i) * k);
+      if (y < -0.49) pp.setY(i, y - rand(0, 0.12));
+    }
+    leafGeo.computeVertexNormals(); leafGeo.translate(0, 0.5, 0);
+  }
+  const trunks = new THREE.InstancedMesh(trunkGeo, barkMat, N);
+  const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), N * 4);
+  trunks.castShadow = leaves.castShadow = true; trunks.receiveShadow = leaves.receiveShadow = true;
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+  let li = 0;
+  for (let i = 0; i < N; i++) {
+    let x, z, r;
+    do { const a = Math.random() * Math.PI * 2; r = 13 + Math.pow(Math.random(), 0.85) * 145; x = Math.cos(a) * r; z = Math.sin(a) * r; }
+    while (Math.abs(x - 9) < 4 && Math.abs(z + 2) < 4);
+    const h = rand(8, 16), y = H(x, z) - 0.2;
+    q.setFromAxisAngle(up, Math.random() * 6.28);
+    m.compose(v.set(x, y, z), q, s.set(h / 11, h * 0.62, h / 11)); trunks.setMatrixAt(i, m);
+    const dead = Math.random() < 0.1;
+    const layers = [[0.2, 0.36, 0.42], [0.36, 0.3, 0.36], [0.52, 0.23, 0.3], [0.67, 0.15, 0.25]];
+    const hue = rand(0.27, 0.36), lum = rand(0.09, 0.16);
+    for (const [yy, rr, hh] of layers) {
+      m.compose(v.set(x, y + h * yy, z), q, dead ? s.set(0.001, 0.001, 0.001) : s.set(h * rr, h * hh, h * rr));
+      leaves.setMatrixAt(li, m);
+      col.setHSL(hue, rand(0.3, 0.45), lum + yy * 0.05).convertSRGBToLinear(); leaves.setColorAt(li, col); li++;
+    }
+    obstacles.push({ x, z, r: 0.42 * h / 11 + 0.1 });
+    treeSpots.push([x, z]);
+  }
+  scene.add(trunks, leaves);
+
+  // bushes
+  const bushGeo = new THREE.IcosahedronGeometry(1, 1);
+  { const pp = bushGeo.attributes.position; for (let i = 0; i < pp.count; i++) { const k = rand(0.8, 1.2); pp.setXYZ(i, pp.getX(i) * k, pp.getY(i) * k * 0.8, pp.getZ(i) * k); } bushGeo.computeVertexNormals(); }
+  const NB = HQ ? 340 : 200;
+  const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }), NB);
+  bushes.castShadow = true; bushes.receiveShadow = true;
+  for (let i = 0; i < NB; i++) {
+    const a = Math.random() * 6.28, r = rand(9, 130), x = Math.cos(a) * r, z = Math.sin(a) * r, sc = rand(0.5, 1.3);
+    q.setFromAxisAngle(up, Math.random() * 6.28);
+    m.compose(v.set(x, H(x, z) + sc * 0.3, z), q, s.set(sc, sc, sc)); bushes.setMatrixAt(i, m);
+    col.setHSL(rand(0.22, 0.32), rand(0.3, 0.5), rand(0.1, 0.17)).convertSRGBToLinear(); bushes.setColorAt(i, col);
+  }
+  scene.add(bushes);
+
+  // rocks
+  const rockGeo = new THREE.DodecahedronGeometry(1, 1);
+  { const pp = rockGeo.attributes.position; for (let i = 0; i < pp.count; i++) { const k = rand(0.85, 1.12); pp.setXYZ(i, pp.getX(i) * k, pp.getY(i) * k, pp.getZ(i) * k); } rockGeo.computeVertexNormals(); }
+  const rockMat = new THREE.MeshStandardMaterial({ color: C(0x77736b), roughness: 0.9, flatShading: true });
+  for (let i = 0; i < 80; i++) {
+    const a = Math.random() * 6.28, r = rand(11, 140), x = Math.cos(a) * r, z = Math.sin(a) * r, sc = rand(0.3, 1.6);
+    const rk = new THREE.Mesh(rockGeo, rockMat);
+    rk.position.set(x, H(x, z) - 0.15 * sc, z); rk.scale.set(sc, sc * 0.65, sc); rk.rotation.set(rand(0, 3), rand(0, 3), 0);
+    rk.castShadow = rk.receiveShadow = true; scene.add(rk);
+    if (sc > 0.7) obstacles.push({ x, z, r: sc * 0.9 });
+  }
+  // fallen logs
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * 6.28, r = rand(14, 90), x = Math.cos(a) * r, z = Math.sin(a) * r, L = rand(3, 7);
+    const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, L, 8), barkMat);
+    lg.rotation.set(0, Math.random() * 6.28, Math.PI / 2); lg.rotation.order = 'YXZ';
+    lg.position.set(x, H(x, z) + 0.2, z); lg.castShadow = lg.receiveShadow = true; scene.add(lg);
+  }
+  // glowing mushrooms near tree roots
+  const capGeo = new THREE.SphereGeometry(0.07, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  const stemGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.09, 5);
+  const capMat = new THREE.MeshStandardMaterial({ color: C(0x9ff5e0), emissive: C(0x30ffd0), emissiveIntensity: 0.9, roughness: 0.6 });
+  const stemMat = new THREE.MeshStandardMaterial({ color: C(0xd8d0c0), roughness: 0.8 });
+  const caps = new THREE.InstancedMesh(capGeo, capMat, 150), stems = new THREE.InstancedMesh(stemGeo, stemMat, 150);
+  for (let i = 0; i < 150; i++) {
+    const t = treeSpots[Math.floor(Math.random() * treeSpots.length)];
+    const a = Math.random() * 6.28, d = rand(0.5, 1.4), x = t[0] + Math.cos(a) * d, z = t[1] + Math.sin(a) * d, sc = rand(0.7, 1.6), y = H(x, z);
+    m.compose(v.set(x, y + 0.045 * sc, z), q.identity(), s.set(sc, sc, sc)); stems.setMatrixAt(i, m);
+    m.compose(v.set(x, y + 0.085 * sc, z), q.identity(), s.set(sc, sc * 0.8, sc)); caps.setMatrixAt(i, m);
+  }
+  scene.add(caps, stems);
+}
+
+/* grass with wind sway (instanced, vertex-shader animated) */
+const grassUniforms = { uTime: { value: 0 } };
+{
+  const pos = [], col = [], nrm = [];
+  const dark = C(0x1d2a12), light = C(0x7d8a46);
+  for (let i = 0; i < 7; i++) {
+    const a = Math.random() * Math.PI, h = rand(0.3, 0.65), w = rand(0.035, 0.06), lean = rand(-0.18, 0.18);
+    const ox = rand(-0.2, 0.2), oz = rand(-0.2, 0.2), cx = Math.cos(a) * w, cz = Math.sin(a) * w;
+    const A = [ox - cx, 0, oz - cz], B = [ox + cx, 0, oz + cz], T = [ox + lean * Math.sin(a), h, oz + lean * Math.cos(a)];
+    pos.push(...A, ...B, ...T, ...B, ...A, ...T);
+    for (let k = 0; k < 2; k++) { col.push(dark.r, dark.g, dark.b, dark.r, dark.g, dark.b, light.r, light.g, light.b); nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = grassUniforms.uTime;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec4 gw = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      float sway = sin(uTime * 1.8 + gw.x * 0.35 + gw.z * 0.25) + 0.4 * sin(uTime * 3.7 + gw.x);
+      transformed.x += sway * position.y * 0.18; transformed.z += sway * position.y * 0.08;`);
+  };
+  const NG = HQ ? 16000 : 6000;
+  const grass = new THREE.InstancedMesh(g, mat, NG);
+  grass.receiveShadow = true;
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < NG; i++) {
+    let x, z;
+    do { const a = Math.random() * 6.28, r = 4 + Math.pow(Math.random(), 0.7) * 75; x = Math.cos(a) * r; z = Math.sin(a) * r; }
+    while (Math.hypot(x - 0, z + 6) < 2.3 || Math.hypot(x - 9, z + 2) < 2.6);
+    q.setFromAxisAngle(up, Math.random() * 6.28); const sc = rand(0.7, 1.4);
+    m.compose(v.set(x, H(x, z) - 0.02, z), q, s.set(sc, sc * rand(0.8, 1.3), sc)); grass.setMatrixAt(i, m);
+  }
+  grass.frustumCulled = false;
+  scene.add(grass);
+}
+
+/* ================= lights ================= */
+const hemi = new THREE.HemisphereLight(0xbfd6ff, 0x2a2418, 0.6); scene.add(hemi);
+const sky1 = new THREE.DirectionalLight(0xffffff, 2); // sun by day, moon by night
+sky1.castShadow = true;
+sky1.shadow.mapSize.set(HQ ? 2048 : 1024, HQ ? 2048 : 1024);
+Object.assign(sky1.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 260 });
+sky1.shadow.bias = -0.0006; sky1.shadow.normalBias = 0.03;
+scene.add(sky1, sky1.target);
+
+const moonGroup = new THREE.Group();
+const moonDir = new THREE.Vector3(-0.45, 0.62, -0.64).normalize();
+{
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 24), new THREE.MeshBasicMaterial({ color: C(0xf2f0e6), fog: false, toneMapped: false }));
+  moonGroup.add(moon);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex('rgba(220,230,255,0.9)', 'rgba(140,160,220,0.25)'), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
+  halo.scale.set(90, 90, 1); moonGroup.add(halo);
+  scene.add(moonGroup);
+}
+const stars = (() => {
+  const n = 1400, pos = [];
+  for (let i = 0; i < n; i++) {
+    const th = Math.random() * 6.283, v = Math.random() * 0.92 + 0.08, ph = Math.acos(v);
+    pos.push(Math.sin(ph) * Math.cos(th) * 400, Math.cos(ph) * 400, Math.sin(ph) * Math.sin(th) * 400);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const s = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: false, fog: false, transparent: true, toneMapped: false }));
+  scene.add(s); return s;
+})();
+
+/* ================= camp: fire ================= */
+const fireLight = new THREE.PointLight(0xff7a2a, 3, 30, 2);
+fireLight.position.set(0, 1.0, 0);
+if (HQ) { fireLight.castShadow = true; fireLight.shadow.mapSize.set(512, 512); fireLight.shadow.bias = -0.004; fireLight.shadow.camera.near = 0.3; }
+scene.add(fireLight);
+const flames = [], smokes = [];
+const emberMat = new THREE.MeshStandardMaterial({ map: barkTex, color: C(0x2a1a10), emissive: C(0xc83008), emissiveIntensity: 1, roughness: 1 });
+{
+  const stoneMat = new THREE.MeshStandardMaterial({ color: C(0x6f6a62), roughness: 0.85, flatShading: true });
+  const sg = new THREE.DodecahedronGeometry(0.22, 0);
+  for (let i = 0; i < 11; i++) {
+    const a = i / 11 * 6.28, st = new THREE.Mesh(sg, stoneMat);
+    st.position.set(Math.cos(a) * 0.78, 0.1, Math.sin(a) * 0.78); st.rotation.set(rand(0, 3), rand(0, 3), 0); st.scale.setScalar(rand(0.8, 1.2));
+    st.receiveShadow = true; scene.add(st);
+  }
+  for (let i = 0; i < 5; i++) {
+    const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.05, 7), emberMat);
+    lg.rotation.order = 'YXZ'; lg.rotation.y = i / 5 * 6.28; lg.rotation.x = 1.0; lg.position.y = 0.32; scene.add(lg);
+  }
+  for (let i = 0; i < 9; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex, color: i < 4 ? C(0xff8a30) : i < 7 ? C(0xffc060) : C(0xfff0b0), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    sp.userData = { ph: Math.random() * 10, ox: rand(-0.22, 0.22), oz: rand(-0.22, 0.22), base: i < 4 ? 1.2 : i < 7 ? 0.85 : 0.5 };
+    scene.add(sp); flames.push(sp);
+  }
+  for (let i = 0; i < 8; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0x6a6460, transparent: true, depthWrite: false, opacity: 0.25 }));
+    sp.userData = { life: i / 8, ox: rand(-0.2, 0.2) }; scene.add(sp); smokes.push(sp);
+  }
+  obstacles.push({ x: 0, z: 0, r: 0.9 });
+}
+const embers = (() => {
+  const n = 60, g = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), life = [];
+  for (let i = 0; i < n; i++) life.push(Math.random());
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffa040, size: 0.05, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  scene.add(pts);
+  return { pts, pos, life, n, seeds: life.map(() => [rand(-0.3, 0.3), rand(-0.3, 0.3), rand(0.6, 1.4)]) };
+})();
+
+/* fireflies & ground mist */
+const fireflies = (() => {
+  const n = 140, pos = new Float32Array(n * 3), seeds = [];
+  for (let i = 0; i < n; i++) seeds.push([rand(-35, 35), rand(-35, 35), rand(0.4, 2.5), Math.random() * 10]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: C(0xd8ff70), size: 0.09, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  scene.add(pts); return { pts, pos, seeds, n };
+})();
+const mists = [];
+for (let i = 0; i < (HQ ? 34 : 18); i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0x9fb0c8, transparent: true, depthWrite: false, opacity: 0 }));
+  const a = Math.random() * 6.28, r = rand(6, 45);
+  sp.userData = { x: Math.cos(a) * r, z: Math.sin(a) * r, sp: rand(0.2, 0.6), ph: Math.random() * 6 };
+  sp.scale.set(rand(10, 18), rand(3, 5), 1); scene.add(sp); mists.push(sp);
+}
+
+/* ================= food (detailed models with printed labels) ================= */
+const KFONT = '"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+const metalMat = new THREE.MeshStandardMaterial({ color: C(0xaeb4ba), metalness: 0.6, roughness: 0.4 });
+function labelTex(w, h, draw) { const t = canvasTex(w, h, draw); t.anisotropy = maxAniso; return t; }
+const foodTex = {
+  tuna: labelTex(512, 128, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0d4f8b'); g.addColorStop(1, '#083560');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#f4d03f'; x.fillRect(0, 10, w, 6); x.fillRect(0, h - 16, w, 6);
+    for (const ox of [0, 256]) {
+      x.fillStyle = '#fff'; x.font = `bold 46px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('참치', ox + 22, 58);
+      x.font = `bold 15px ${KFONT}`; x.fillStyle = '#f4d03f'; x.fillText('살코기 · 150g', ox + 26, 96);
+      x.fillStyle = '#e8a0a0'; x.beginPath(); x.ellipse(ox + 200, 64, 34, 16, 0, 0, 7); x.fill(); // tuna steak
+      x.fillStyle = '#c96c6c'; x.beginPath(); x.ellipse(ox + 200, 64, 20, 8, 0, 0, 7); x.fill();
+    }
+  }),
+  ramenSide: labelTex(512, 128, (x, w, h) => {
+    x.fillStyle = '#c0392b'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#fff'; x.fillRect(0, h - 22, w, 22);
+    for (const ox of [0, 256]) {
+      x.fillStyle = '#ffe9a8'; x.font = `900 52px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('라면', ox + 18, 52);
+      x.fillStyle = '#c0392b'; x.font = `bold 13px ${KFONT}`; x.fillText('매운맛 · 컵', ox + 30, h - 11);
+      x.strokeStyle = '#f6c24a'; x.lineWidth = 3;
+      for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(ox + 150, 30 + i * 9); x.bezierCurveTo(ox + 180, 20 + i * 9, ox + 200, 45 + i * 9, ox + 235, 30 + i * 9); x.stroke(); } // noodles
+      x.fillStyle = '#e74c3c'; x.beginPath(); x.arc(ox + 225, 25, 8, 0, 7); x.fill();
+    }
+  }),
+  ramenLid: labelTex(128, 128, (x, w, h) => {
+    const g = x.createRadialGradient(64, 64, 10, 64, 64, 64); g.addColorStop(0, '#eceff1'); g.addColorStop(1, '#9ea7ad');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#c0392b'; x.font = `900 34px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('라면', 64, 60);
+    x.font = `bold 11px ${KFONT}`; x.fillText('여기를 뜯으세요 ▸', 64, 92);
+  }),
+  chips: labelTex(256, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#f7c600'); g.addColorStop(1, '#e09b00');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#d62f2f'; x.beginPath(); x.ellipse(128, 105, 105, 48, -0.12, 0, 7); x.fill();
+    x.fillStyle = '#fff'; x.font = `900 54px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('감자칩', 128, 104);
+    for (let i = 0; i < 7; i++) { // chips
+      x.save(); x.translate(60 + (i % 4) * 45 + (i > 3 ? 22 : 0), 200 + (i > 3 ? 45 : 0)); x.rotate(rand(-0.6, 0.6));
+      x.fillStyle = '#f9e08a'; x.beginPath(); x.ellipse(0, 0, 26, 18, 0, 0, 7); x.fill();
+      x.fillStyle = 'rgba(190,130,40,.5)'; for (let k = 0; k < 4; k++) { x.beginPath(); x.arc(rand(-14, 14), rand(-8, 8), 2.5, 0, 7); x.fill(); }
+      x.restore();
+    }
+    x.fillStyle = '#7a3b00'; x.font = `bold 16px ${KFONT}`; x.fillText('오리지널 · 60g', 128, 292);
+  }),
+  water: labelTex(256, 64, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1e88e5'); g.addColorStop(1, '#1565c0');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 2; x.beginPath();
+    for (let i = 0; i <= w; i += 8) x.lineTo(i, 48 + Math.sin(i / 14) * 4); x.stroke();
+    for (const ox of [0, 128]) { x.fillStyle = '#fff'; x.font = `900 26px ${KFONT}`; x.textBaseline = 'middle'; x.fillText('생수', ox + 16, 26); x.font = `10px ${KFONT}`; x.fillText('500mL', ox + 80, 28); }
+  }),
+  choco: labelTex(256, 96, (x, w, h) => {
+    x.fillStyle = '#4a2511'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#b8862b'; x.fillRect(0, 0, 26, h); x.fillRect(w - 26, 0, 26, h);
+    x.fillStyle = '#c0392b'; x.fillRect(40, 18, 176, 60);
+    x.fillStyle = '#ffe7c2'; x.font = `900 36px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('초콜릿', 128, 50);
+  }),
+  box: labelTex(256, 256, (x, w, h) => {
+    x.fillStyle = '#b08354'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(${rand(80, 140)},${rand(55, 95)},30,${rand(0.05, 0.15)})`; x.fillRect(rand(0, w), rand(0, h), rand(1, 3), rand(1, 3)); }
+    x.fillStyle = 'rgba(200,190,170,.85)'; x.fillRect(0, 0, w, 26); // packing tape
+    x.strokeStyle = 'rgba(30,20,10,.75)'; x.lineWidth = 4; x.strokeRect(46, 82, 164, 96);
+    x.fillStyle = 'rgba(30,20,10,.8)'; x.font = `900 38px ${KFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('비상식량', 128, 118);
+    x.font = `bold 15px ${KFONT}`; x.fillText('100개입 · 이쪽이 위 ↑', 128, 158);
+  }),
+};
+const ringGeo = new THREE.TorusGeometry(0.047, 0.004, 6, 24);
+const FOOD_TYPES = {
+  tuna: { name: '참치캔', sound: 'can', make() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.047, 0.047, 0.045, 28, 1, true), new THREE.MeshStandardMaterial({ map: foodTex.tuna, metalness: 0.3, roughness: 0.45, side: THREE.DoubleSide }));
+    body.position.y = 0.0245; g.add(body);
+    for (const y of [0.002, 0.047]) { const r = new THREE.Mesh(ringGeo, metalMat); r.rotation.x = Math.PI / 2; r.position.y = y; g.add(r); }
+    const lid = new THREE.Mesh(new THREE.CircleGeometry(0.046, 28), metalMat); lid.rotation.x = -Math.PI / 2; lid.position.y = 0.046; g.add(lid);
+    const score = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.0015, 4, 24), metalMat); score.rotation.x = Math.PI / 2; score.position.y = 0.047; g.add(score);
+    const tab = new THREE.Mesh(new THREE.TorusGeometry(0.011, 0.003, 6, 14), metalMat); tab.rotation.x = Math.PI / 2; tab.position.set(0.02, 0.049, 0); g.add(tab);
+    return g;
+  } },
+  ramen: { name: '컵라면', sound: 'slurp', make() {
+    const g = new THREE.Group();
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.044, 0.1, 28), [
+      new THREE.MeshStandardMaterial({ map: foodTex.ramenSide, roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: foodTex.ramenLid, metalness: 0.25, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: C(0xf2f2f2), roughness: 0.7 })]);
+    cup.position.y = 0.05; g.add(cup);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.004, 6, 28), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.5 }));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.1; g.add(rim);
+    const flap = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.025), new THREE.MeshStandardMaterial({ map: foodTex.ramenLid, metalness: 0.25, roughness: 0.5, side: THREE.DoubleSide }));
+    flap.position.set(0.062, 0.104, 0); flap.rotation.set(-Math.PI / 2, 0, 0.3); g.add(flap);
+    return g;
+  } },
+  chips: { name: '감자칩', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const geo = new THREE.BoxGeometry(0.15, 0.2, 0.05, 10, 12, 3), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { // puff the bag: full in the middle, flat at the sealed ends
+      const x = p.getX(i) / 0.075, y = p.getY(i) / 0.1;
+      const puff = (1 - Math.pow(Math.abs(y), 6)) * (1 - Math.pow(Math.abs(x), 4) * 0.5);
+      p.setZ(i, p.getZ(i) * Math.max(0.08, puff) * 1.5);
+      p.setX(i, p.getX(i) * (1 - 0.1 * (1 - Math.abs(y)) * Math.abs(x)));
+    }
+    geo.computeVertexNormals();
+    const foilMat = new THREE.MeshStandardMaterial({ map: foodTex.chips, metalness: 0.35, roughness: 0.32 });
+    const bag = new THREE.Mesh(geo, foilMat); g.add(bag);
+    const sealMat = new THREE.MeshStandardMaterial({ color: C(0xd8a300), metalness: 0.4, roughness: 0.4 });
+    for (const y of [-0.105, 0.105]) { // crimped seals
+      for (let k = 0; k < 10; k++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.0145, 0.018, 0.004), sealMat); t.position.set(-0.068 + k * 0.0152, y, 0); t.rotation.x = k % 2 ? 0.25 : -0.25; g.add(t); }
+    }
+    g.rotation.x = -Math.PI / 2 + 0.06; g.position.y = 0.035;
+    const wrap = new THREE.Group(); wrap.add(g); return wrap;
+  } },
+  water: { name: '생수', sound: 'gulp', make() {
+    const g = new THREE.Group();
+    const plastic = new THREE.MeshStandardMaterial({ color: C(0xbfe3ff), transparent: true, opacity: 0.38, roughness: 0.05, metalness: 0.1, depthWrite: false });
+    const waterMat = new THREE.MeshStandardMaterial({ color: C(0x7fc4ff), transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.15, 20), plastic); body.position.y = 0.075; g.add(body);
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.029, 0.029, 0.12, 20), waterMat); water.position.y = 0.062; g.add(water);
+    for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.002, 4, 20), plastic); r.rotation.x = Math.PI / 2; r.position.y = 0.025 + i * 0.012; g.add(r); }
+    const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.032, 0.04, 20), plastic); shoulder.position.y = 0.17; g.add(shoulder);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0335, 0.0335, 0.045, 24, 1, true), new THREE.MeshStandardMaterial({ map: foodTex.water, roughness: 0.5 }));
+    label.position.y = 0.1; g.add(label);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.018, 16), new THREE.MeshStandardMaterial({ color: C(0x1565c0), roughness: 0.4 }));
+    cap.position.y = 0.199; g.add(cap);
+    return g;
+  } },
+  choco: { name: '초콜릿', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.016, 0.06), [
+      new THREE.MeshStandardMaterial({ color: C(0xb8862b), metalness: 0.7, roughness: 0.3 }), new THREE.MeshStandardMaterial({ color: C(0xb8862b), metalness: 0.7, roughness: 0.3 }),
+      new THREE.MeshStandardMaterial({ map: foodTex.choco, roughness: 0.45 }), new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 }),
+      new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 }), new THREE.MeshStandardMaterial({ color: C(0x4a2511), roughness: 0.6 })]);
+    bar.position.y = 0.008; g.add(bar);
+    return g;
+  } },
+  apple: { name: '사과', sound: 'crunch', make() {
+    const g = new THREE.Group();
+    const geo = new THREE.SphereGeometry(0.042, 20, 16), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y > 0.03) p.setY(i, y - (y - 0.03) * 0.9); if (y < -0.035) p.setY(i, y * 0.9); }
+    geo.computeVertexNormals();
+    const apple = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: C(0xb3141c), roughness: 0.35 }));
+    apple.position.y = 0.04; g.add(apple);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.003, 0.025, 5), new THREE.MeshStandardMaterial({ color: C(0x5a3a1a) }));
+    stem.position.y = 0.08; stem.rotation.z = 0.25; g.add(stem);
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshStandardMaterial({ color: C(0x3f8f2f), roughness: 0.6 }));
+    leaf.scale.set(1.6, 0.25, 0.8); leaf.position.set(0.012, 0.085, 0); leaf.rotation.z = -0.4; g.add(leaf);
+    return g;
+  } },
+};
+const FOOD_LAYOUT = ['tuna', 'ramen', 'chips', 'water', 'choco', 'apple', 'tuna', 'ramen', 'chips', 'water'];
+const BOX_TYPES = ['tuna', 'ramen', 'chips', 'water', 'choco', 'apple'];
+
+/* ================= camp: tent & props ================= */
+const TENT = { x: 0, z: -6 };
+let tentGroup = null;
+const FOOD_MAX = 110, FOOD_SHOWN = 10, foodMeshes = []; // 10 laid out + a box holding 100 more
+let foodBox = null;
+let food = FOOD_MAX, hunger = 100, hungerWarn = 0;
+const tentMat = new THREE.MeshStandardMaterial({ map: fabricTex, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthWrite: false, roughness: 0.9 });
+const lantern = new THREE.PointLight(0xffb060, 0, 6, 1.5);
+{
+  const tent = new THREE.Group(); tent.position.set(TENT.x, 0, TENT.z);
+  const tg = new THREE.ConeGeometry(2.2, 2.4, 4, 3, true); tg.rotateY(Math.PI / 4);
+  { const pp = tg.attributes.position; for (let i = 0; i < pp.count; i++) { const y = pp.getY(i); if (y > -1.19 && y < 1.19) { pp.setX(i, pp.getX(i) * 0.95); pp.setZ(i, pp.getZ(i) * 0.95); } } tg.computeVertexNormals(); }
+  tg.translate(0, 1.2, 0);
+  const shell = new THREE.Mesh(tg, tentMat); shell.renderOrder = 1; shell.castShadow = true; tent.add(shell);
+  const fz = 2.2 * Math.SQRT1_2;
+  const eg = new THREE.BufferGeometry();
+  eg.setAttribute('position', new THREE.Float32BufferAttribute([-0.7, 0.01, fz + 0.02, 0.7, 0.01, fz + 0.02, 0, 1.6, fz * (1 - 1.6 / 2.4) + 0.02], 3));
+  eg.computeVertexNormals();
+  tent.add(new THREE.Mesh(eg, new THREE.MeshStandardMaterial({ color: C(0x3a1a0a), side: THREE.DoubleSide, roughness: 1 })));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(fz * 2, fz * 2), new THREE.MeshStandardMaterial({ color: C(0x2a2a30), roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.02; floor.receiveShadow = true; tent.add(floor);
+  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 1.8), new THREE.MeshStandardMaterial({ color: C(0x2f4d6e), roughness: 0.7 }));
+  bag.position.set(-0.4, 0.09, -0.2); tent.add(bag);
+  const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.3), new THREE.MeshStandardMaterial({ color: C(0xcfc6b0), roughness: 1 }));
+  pillow.position.set(-0.4, 0.2, -0.95); tent.add(pillow);
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.18, 10), new THREE.MeshStandardMaterial({ color: C(0xffc070), emissive: C(0xffa040), emissiveIntensity: 2 }));
+  lamp.position.set(0.7, 0.1, -0.6); tent.add(lamp);
+  lantern.position.set(0.7, 0.45, -0.6); tent.add(lantern);
+  for (let i = 0; i < FOOD_SHOWN; i++) {
+    const col = i % 2, row = Math.floor(i / 2), type = FOOD_LAYOUT[i];
+    const g = FOOD_TYPES[type].make();
+    g.userData.type = type;
+    g.position.set(0.55 + col * 0.21 + rand(-0.02, 0.02), 0.02, 0.05 + row * 0.18);
+    g.rotation.y = rand(-0.6, 0.6);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    tent.add(g); foodMeshes.push(g);
+  }
+  // cardboard supply box holding the other 100
+  foodBox = new THREE.Group();
+  const cardboard = new THREE.MeshStandardMaterial({ map: foodTex.box, roughness: 0.95 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.32), [cardboard, cardboard, new THREE.MeshStandardMaterial({ color: C(0x2a1d10), roughness: 1 }), cardboard, cardboard, cardboard]);
+  box.position.y = 0.14; foodBox.add(box);
+  for (const [fx, rot] of [[-1, 0.9], [1, -0.9]]) { // open flaps
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.004, 0.32), cardboard);
+    flap.geometry.translate(fx * 0.105, 0, 0); flap.position.set(fx * 0.21, 0.28, 0); flap.rotation.z = rot; foodBox.add(flap);
+  }
+  const peek = [['tuna', -0.12, -0.08], ['ramen', 0.0, -0.07], ['water', 0.13, -0.07], ['ramen', -0.11, 0.07], ['tuna', 0.02, 0.08], ['chips', 0.12, 0.07]];
+  for (const [type, x, z] of peek) {
+    const m = FOOD_TYPES[type].make(); m.position.set(x, type === 'water' ? 0.13 : 0.24, z); m.rotation.y = rand(0, 6);
+    if (type === 'chips') { m.rotation.set(0.5, 0, 0.3); m.position.y = 0.22; }
+    foodBox.add(m);
+  }
+  foodBox.position.set(0.75, 0.02, 1.0); foodBox.rotation.y = 0.2;
+  foodBox.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  tent.add(foodBox);
+  // stakes & guy lines
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xd0c8b0 });
+  for (const [cx, cz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const top = new THREE.Vector3(cx * 0.9, 1.2, cz * 0.9), st = new THREE.Vector3(cx * 2.4, 0.05, cz * 2.4);
+    tent.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([top, st]), lineMat));
+  }
+  scene.add(tent); tentGroup = tent;
+  obstacles.push({ x: TENT.x, z: TENT.z, r: 1.75 });
+
+  // car
+  const car = new THREE.Group(); car.position.set(9, 0, -2); car.rotation.y = 0.4;
+  const paint = new THREE.MeshStandardMaterial({ color: C(0x2f3b45), metalness: 0.6, roughness: 0.35 });
+  const glass = new THREE.MeshStandardMaterial({ color: C(0x0a0d10), metalness: 0.9, roughness: 0.1 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.9, 4.3), paint); body.position.y = 0.8; car.add(body);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.72, 2.3), glass); cab.position.set(0, 1.6, -0.25); car.add(cab);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.08, 2.1), paint); roof.position.set(0, 1.98, -0.25); car.add(roof);
+  const rack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 1.4), new THREE.MeshStandardMaterial({ color: C(0x5a4a2a), roughness: 0.9 })); rack.position.set(0, 2.15, -0.3); car.add(rack);
+  const wg = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16); wg.rotateZ(Math.PI / 2);
+  const wm = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  for (const [x, z] of [[1, 1.35], [-1, 1.35], [1, -1.35], [-1, -1.35]]) { const w = new THREE.Mesh(wg, wm); w.position.set(x, 0.4, z); car.add(w); }
+  const tl = new THREE.MeshStandardMaterial({ color: 0x400000, emissive: C(0xff1010), emissiveIntensity: 0.6 });
+  for (const x of [-0.75, 0.75]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.05), tl); l.position.set(x, 1.0, -2.16); car.add(l); }
+  car.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(car);
+  obstacles.push({ x: 9, z: -2, r: 2.2 });
+
+  // camping chair, cooler, wood pile
+  const chair = new THREE.Group(); chair.position.set(-2.2, 0, 1.4); chair.rotation.y = 2.3;
+  const frame = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7, roughness: 0.4 });
+  const cloth = new THREE.MeshStandardMaterial({ color: C(0x2d5a3a), roughness: 0.9, side: THREE.DoubleSide });
+  for (const [x, z] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.5), frame); l.position.set(x, 0.25, z); chair.add(l); }
+  const seat = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), cloth); seat.rotation.x = -Math.PI / 2; seat.position.y = 0.48; chair.add(seat);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.6), cloth); back.position.set(0, 0.78, -0.28); back.rotation.x = -0.2; chair.add(back);
+  chair.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(chair);
+  const cooler = new THREE.Group(); cooler.position.set(2.4, 0, -3.2); cooler.rotation.y = 0.5;
+  const cb = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.45), new THREE.MeshStandardMaterial({ color: C(0x2a5ea0), roughness: 0.5 })); cb.position.y = 0.2; cooler.add(cb);
+  const cl = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.47), new THREE.MeshStandardMaterial({ color: C(0xe8e8e8), roughness: 0.5 })); cl.position.y = 0.44; cooler.add(cl);
+  cooler.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(cooler);
+  obstacles.push({ x: 2.4, z: -3.2, r: 0.4 }, { x: -2.2, z: 1.4, r: 0.4 });
+}
+
+/* ================= sticks ================= */
+const sticks = [];
+{
+  const sg = new THREE.CylinderGeometry(0.045, 0.06, 1.1, 6); sg.rotateZ(Math.PI / 2);
+  const sm = new THREE.MeshStandardMaterial({ map: barkTex, color: C(0xc09060), emissive: C(0x2a1408), roughness: 1 });
+  for (let i = 0; i < 26; i++) {
+    const g = new THREE.Group();
+    const a = new THREE.Mesh(sg, sm), b = new THREE.Mesh(sg, sm);
+    b.rotation.y = 0.8; b.position.y = 0.06; b.scale.set(0.8, 1, 1);
+    a.castShadow = b.castShadow = true;
+    g.add(a, b); scene.add(g);
+    const st = { g, active: true }; placeStick(st); st.active = false; g.visible = false; sticks.push(st);
+  }
+}
+function placeStick(st) {
+  let x, z, ok;
+  do {
+    const a = Math.random() * 6.28, r = rand(12, 85); x = Math.cos(a) * r; z = Math.sin(a) * r;
+    ok = !obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + 0.8);
+  } while (!ok);
+  st.g.position.set(x, H(x, z) + 0.06, z); st.g.rotation.y = Math.random() * 6.28;
+  st.active = true; st.g.visible = true;
+}
+
+/* ================= first-person view model (hands + flashlight) ================= */
+const skinMat = new THREE.MeshStandardMaterial({ color: C(0xc8977a), roughness: 0.75 });
+const jacketMat = new THREE.MeshStandardMaterial({ color: C(0x7a2e22), roughness: 0.85 });
+const cuffMat = new THREE.MeshStandardMaterial({ color: C(0x2a2a2a), roughness: 0.9 });
+function makeHand(side) {
+  const g = new THREE.Group();
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.07, 0.5, 12), jacketMat);
+  sleeve.rotation.x = Math.PI / 2; sleeve.position.set(side * 0.02, -0.01, 0.3); g.add(sleeve);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.056, 0.05, 12), cuffMat);
+  cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, 0.06); g.add(cuff);
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.045, 0.1), skinMat); palm.position.set(0, 0, -0.01); g.add(palm);
+  for (let f = 0; f < 4; f++) {
+    const fg = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.02, 0.06), skinMat);
+    fg.position.set(-0.03 + f * 0.02, 0.01, -0.07); fg.rotation.x = -0.9; g.add(fg);
+  }
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.06), skinMat);
+  thumb.position.set(-side * 0.05, 0.02, -0.03); thumb.rotation.y = side * 0.6; g.add(thumb);
+  g.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  return g;
+}
+const vm = new THREE.Group(); camera.add(vm);
+const rightHand = makeHand(1);
+const RH_BASE = new THREE.Vector3(0.27, -0.27, -0.42);
+rightHand.position.copy(RH_BASE); vm.add(rightHand);
+const flashModel = new THREE.Group();
+{
+  const metal = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, metalness: 0.7, roughness: 0.35 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.022, 0.2, 14), metal); body.rotation.x = Math.PI / 2; flashModel.add(body);
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.08, 14), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 })); grip.rotation.x = Math.PI / 2; grip.position.z = 0.03; flashModel.add(grip);
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.026, 0.06, 16), metal); head.rotation.x = Math.PI / 2; head.position.z = -0.12; flashModel.add(head);
+  const lensMat = new THREE.MeshStandardMaterial({ color: 0xfff6e0, emissive: 0xfff1d0, emissiveIntensity: 0, roughness: 0.1 });
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.034, 16), lensMat); lens.position.z = -0.151; lens.rotation.y = Math.PI; flashModel.add(lens);
+  flashModel.userData.lens = lensMat;
+  flashModel.position.set(0, 0.035, -0.04);
+  rightHand.add(flashModel);
+}
+const flash = new THREE.SpotLight(0xfff1d8, 0, 50, 0.42, 0.5, 1.4);
+flash.position.set(0, 0, -0.16);
+flashModel.add(flash); flashModel.add(flash.target); flash.target.position.set(0, -0.15, -5);
+if (HQ) { flash.castShadow = true; flash.shadow.mapSize.set(512, 512); flash.shadow.camera.near = 0.3; flash.shadow.camera.far = 50; flash.shadow.bias = -0.0008; }
+const beam = (() => {
+  const g = new THREE.ConeGeometry(2.4, 11, 24, 1, true); g.translate(0, -5.5, 0); g.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xfff0d0, alphaMap: beamTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  mesh.position.z = -0.16; mesh.rotation.x = -0.03; flashModel.add(mesh); return mesh;
+})();
+const leftHand = makeHand(-1);
+const LH_BASE = new THREE.Vector3(-0.26, -0.3, -0.42), LH_HIDE = new THREE.Vector3(-0.3, -0.8, -0.3), LH_MOUTH = new THREE.Vector3(-0.09, -0.19, -0.33);
+leftHand.position.copy(LH_HIDE); vm.add(leftHand);
+const bundle = new THREE.Group();
+{
+  const sg = new THREE.CylinderGeometry(0.016, 0.02, 0.34, 6);
+  const sm = new THREE.MeshStandardMaterial({ map: barkTex, color: C(0xb08058), roughness: 1 });
+  for (let i = 0; i < 6; i++) {
+    const s = new THREE.Mesh(sg, sm);
+    s.rotation.set(rand(-0.15, 0.15), rand(-0.3, 0.3), Math.PI / 2 + rand(-0.12, 0.12));
+    s.position.set(0.03 + rand(-0.02, 0.02), 0.03 + (i % 3) * 0.022, -0.03 + Math.floor(i / 3) * 0.03);
+    bundle.add(s);
+  }
+  bundle.scale.setScalar(0.7); bundle.position.set(0.01, -0.01, 0.02);
+  leftHand.add(bundle);
+}
+const VM = { swayX: 0, swayY: 0, lastYaw: 0, lastPitch: 0, pickT: 0, flashT: 0, eatT: 0, eatMesh: null };
+
+/* ================= monster ================= */
+// Gaunt, pale, hunched thing: backward-bending legs, arms that drag on the ground,
+// hollow eyes behind lank black hair, and a jaw that opens far too wide.
+const monster = (() => {
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: C(0xa39a8c), roughness: 0.62 });
+  const skinDark = new THREE.MeshStandardMaterial({ color: C(0x5e564c), roughness: 0.8 });
+  const bone = new THREE.MeshStandardMaterial({ color: C(0xe2d8c2), roughness: 0.45 });
+  const gum = new THREE.MeshStandardMaterial({ color: C(0x2a0404), roughness: 0.35 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: C(0x050505), roughness: 0.9, side: THREE.DoubleSide });
+  const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const limb = (r1, r2, len, mat) => { const geo = new THREE.CylinderGeometry(r1, r2, len, 7); geo.translate(0, -len / 2, 0); return new THREE.Mesh(geo, mat); };
+  const joint = (r, mat) => new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), mat);
+
+  // legs (digitigrade: thigh forward, shin bends back)
+  const legs = [-1, 1].map(side => {
+    const hip = new THREE.Group(); hip.position.set(side * 0.16, 1.5, 0);
+    hip.add(limb(0.075, 0.05, 0.8, skin));
+    const knee = new THREE.Group(); knee.position.y = -0.8; hip.add(knee);
+    knee.add(joint(0.06, skinDark));
+    knee.add(limb(0.05, 0.03, 0.8, skin));
+    for (let t = -1; t <= 1; t++) {
+      const toe = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.2, 5), bone);
+      toe.rotation.x = Math.PI / 2; toe.position.set(t * 0.04, -0.8, 0.1); knee.add(toe);
+    }
+    g.add(hip); return { hip, knee };
+  });
+
+  // hunched spine
+  const spine = new THREE.Group(); spine.position.set(0, 1.5, 0); spine.rotation.x = 0.5; g.add(spine);
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.18), skinDark); spine.add(pelvis);
+  const torsoGeo = new THREE.CylinderGeometry(0.23, 0.12, 1.1, 10); torsoGeo.translate(0, 0.55, 0);
+  const torso = new THREE.Mesh(torsoGeo, skin); torso.scale.z = 0.75; spine.add(torso);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), skinDark); belly.scale.set(1, 1.6, 0.5); belly.position.set(0, 0.25, 0.06); spine.add(belly);
+  for (let i = 0; i < 6; i++) { // ribs pushing through the skin
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(0.16 + i * 0.012, 0.014, 4, 14, Math.PI), skinDark);
+    rib.rotation.x = Math.PI / 2; rib.scale.set(1, 0.85, 1); rib.position.set(0, 0.48 + i * 0.09, 0.0); spine.add(rib);
+  }
+  for (let i = 0; i < 9; i++) { const v = joint(0.035, skin); v.position.set(0, 0.1 + i * 0.12, -0.16 - Math.sin(i / 8 * Math.PI) * 0.04); spine.add(v); }
+
+  // arms: shoulder -> upper arm -> elbow -> forearm -> long fingers
+  const arms = [-1, 1].map(side => {
+    const sh = new THREE.Group(); sh.position.set(side * 0.27, 1.05, 0); spine.add(sh);
+    sh.add(joint(0.065, skinDark));
+    sh.add(limb(0.05, 0.035, 0.95, skin));
+    const elbow = new THREE.Group(); elbow.position.y = -0.95; sh.add(elbow);
+    elbow.add(joint(0.045, skinDark));
+    elbow.add(limb(0.035, 0.025, 0.95, skin));
+    const hand = new THREE.Group(); hand.position.y = -0.95; elbow.add(hand);
+    hand.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.1, 0.03), skin));
+    for (let f = 0; f < 4; f++) {
+      const f1 = new THREE.Group(); f1.position.set(-0.035 + f * 0.023, -0.05, 0); f1.rotation.z = (f - 1.5) * 0.12; hand.add(f1);
+      f1.add(limb(0.011, 0.008, 0.2, skin));
+      const f2 = new THREE.Group(); f2.position.y = -0.2; f2.rotation.x = 0.5; f1.add(f2);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.16, 4), bone); claw.rotation.x = Math.PI; claw.position.y = -0.08; f2.add(claw);
+    }
+    return { sh, elbow };
+  });
+
+  // neck & head
+  const neck = new THREE.Group(); neck.position.set(0, 1.12, 0.02); neck.rotation.x = 0.55; spine.add(neck);
+  const neckGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.42, 6); neckGeo.translate(0, 0.21, 0);
+  neck.add(new THREE.Mesh(neckGeo, skin));
+  const head = new THREE.Group(); head.position.y = 0.44; head.rotation.x = -1.05; neck.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 16), skin); skull.scale.set(0.82, 1.28, 0.95); head.add(skull);
+  const eyes = [];
+  for (const ex of [-0.072, 0.072]) {
+    const sock = new THREE.Mesh(new THREE.SphereGeometry(0.058, 10, 10), holeMat);
+    sock.scale.set(1, 1.25, 0.55); sock.position.set(ex, 0.06, 0.155); head.add(sock);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false }));
+    pupil.position.set(ex, 0.055, 0.18); head.add(pupil);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff2a14, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    sp.scale.set(0.13, 0.13, 1); sp.position.set(ex, 0.055, 0.19); sp.renderOrder = 3; head.add(sp); eyes.push(sp);
+  }
+  // mouth: wide grin of teeth, jaw hinges open
+  const cavity = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), gum); cavity.scale.set(1.05, 0.6, 0.6); cavity.position.set(0, -0.1, 0.08); head.add(cavity);
+  const toothGeo = new THREE.ConeGeometry(0.011, 0.055, 4);
+  for (let i = 0; i < 14; i++) {
+    const a = -1.15 + i / 13 * 2.3, t = new THREE.Mesh(toothGeo, bone);
+    t.position.set(Math.sin(a) * 0.135, -0.085, Math.cos(a) * 0.14 + 0.02); t.rotation.x = Math.PI; head.add(t);
+  }
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.07, -0.02); head.add(jaw);
+  const jawBone = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), skin);
+  jawBone.scale.set(0.95, 0.8, 1.15); jawBone.position.set(0, -0.03, 0.06); jaw.add(jawBone);
+  for (let i = 0; i < 12; i++) {
+    const a = -1.05 + i / 11 * 2.1, t = new THREE.Mesh(toothGeo, bone);
+    t.position.set(Math.sin(a) * 0.12, -0.04, Math.cos(a) * 0.13 + 0.07); jaw.add(t);
+  }
+  // lank hair hanging over the face
+  for (let i = 0; i < 26; i++) {
+    const a = rand(-2.4, 2.4), len = rand(0.45, 0.85);
+    const strandGeo = new THREE.PlaneGeometry(rand(0.025, 0.05), len); strandGeo.translate(0, -len / 2, 0);
+    const st = new THREE.Mesh(strandGeo, hairMat);
+    const front = Math.abs(a) < 0.22;
+    st.position.set(Math.sin(a + Math.PI) * 0.15, 0.2, Math.cos(a + Math.PI) * 0.17 * (front ? -1.05 : 1));
+    st.rotation.set(front ? 0.12 : -0.05, a + Math.PI, rand(-0.1, 0.1));
+    head.add(st);
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.visible = false; scene.add(g);
+  return { g, spine, neck, head, jaw, legs, arms, eyes,
+    armL: arms[0].sh, armR: arms[1].sh, legL: legs[0].hip, legR: legs[1].hip };
+})();
+
+const glimpse = new THREE.Group();
+for (const ex of [-0.09, 0.09]) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: eyeTex, color: 0xff2a10, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+  sp.scale.set(0.35, 0.35, 1); sp.position.x = ex; glimpse.add(sp);
+}
+glimpse.visible = false; scene.add(glimpse);
+
+/* ================= audio (all synthesized) ================= */
+let AC = null, master, noiseBuf, windGain, windFilt, fireGain;
+function initAudio() {
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination);
+    master = AC.createGain(); master.gain.value = 0.9; master.connect(comp);
+    noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const loop = (freq, type, q) => {
+      const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+      const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = AC.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(master); s.start();
+      return [g, f];
+    };
+    [windGain, windFilt] = loop(380, 'lowpass', 0.7);
+    [fireGain] = loop(900, 'bandpass', 0.6);
+  } catch (e) { AC = null; }
+}
+function env(g, t, vol, atk, dur) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + atk);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+}
+function noiseBurst(dur, freq, q, vol, type = 'bandpass', when = 0, sweepTo) {
+  if (!AC) return; const t = AC.currentTime + when;
+  const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const f = AC.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+  const g = AC.createGain(); env(g, t, vol, 0.01, dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
+}
+function tone(freq, dur, vol, type = 'sine', slide, when = 0, atk = 0.01) {
+  if (!AC) return; const t = AC.currentTime + when;
+  const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+  const g = AC.createGain(); env(g, t, vol, atk, dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+function heartbeat(vol) { tone(62, 0.16, vol, 'sine', 40); tone(55, 0.18, vol * 0.75, 'sine', 36, 0.2); }
+function growl(vol, dur = 1.2, base = 78) {
+  if (!AC) return; const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(base, t); o.frequency.linearRampToValueAtTime(base * 0.7, t + dur);
+  const lfo = AC.createOscillator(); lfo.frequency.value = 23 + Math.random() * 10;
+  const lg = AC.createGain(); lg.gain.value = 22; lfo.connect(lg); lg.connect(o.frequency);
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 650;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.25); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); lfo.start(t); o.stop(t + dur + 0.1); lfo.stop(t + dur + 0.1);
+  noiseBurst(dur, 350, 1, vol * 0.5, 'lowpass');
+}
+function breathSniff(vol) { for (let i = 0; i < 3; i++) noiseBurst(0.18, 1800, 2, vol, 'bandpass', i * 0.22, 900); }
+function crack(vol) { const n = 3 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) noiseBurst(0.012, rand(2500, 5000), 4, vol, 'bandpass', i * rand(0.025, 0.06)); }
+function scratch() { noiseBurst(0.45, 2500, 1.5, 0.22, 'bandpass', 0, 6500); noiseBurst(0.35, 3200, 2, 0.16, 'bandpass', 0.2, 7000); }
+function stinger() {
+  if (!AC) return;
+  [110, 116.5, 164.8, 233].forEach(f => tone(f, 2.6, 0.045, 'sawtooth', f * 0.97, 0, 0.5));
+  tone(1760, 2.4, 0.03, 'sine', 1700, 0, 0.3); tone(1865, 2.4, 0.03, 'sine', 1900, 0, 0.3);
+}
+function screech() {
+  if (!AC) return;
+  for (let i = 0; i < 6; i++) tone(420 + i * 210, 1.5, 0.13, 'sawtooth', 1700 + i * 190, 0, 0.02);
+  noiseBurst(1.7, 2600, 0.6, 0.55, 'highpass');
+  growl(0.8, 1.5, 95);
+}
+function footstep(vol, heavy) { noiseBurst(heavy ? 0.16 : 0.08, heavy ? 220 : 700, 0.8, vol, 'lowpass'); if (heavy) tone(48, 0.15, vol * 0.8, 'sine', 30); }
+function zipper() { for (let i = 0; i < 8; i++) noiseBurst(0.04, 3500, 3, 0.12, 'bandpass', i * 0.045); }
+function whoosh() { noiseBurst(0.8, 300, 0.7, 0.35, 'bandpass', 0, 2000); }
+function whisper() { noiseBurst(0.9, 1400, 6, 0.18, 'bandpass', 0, 2600); noiseBurst(0.7, 2200, 8, 0.12, 'bandpass', 0.5, 1200); }
+function gasp() { noiseBurst(0.5, 1200, 1.2, 0.4, 'bandpass', 0, 2500); }
+
+/* ================= input ================= */
+const keys = {};
+let touchMove = { x: 0, y: 0 }, touchBreath = false, touchRun = false, locked = false;
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyE' && !e.repeat) interact();
+  if (e.code === 'KeyF' && !e.repeat) toggleFlash();
+  if (e.code === 'KeyQ' && !e.repeat) eat();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  if (!isTouch && started && !dead && !won) $('pause').classList.toggle('hidden', locked);
+});
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  P.yaw -= e.movementX * 0.0022; P.pitch -= e.movementY * 0.0022;
+});
+renderer.domElement.addEventListener('click', () => { if (started && !isTouch && !dead) renderer.domElement.requestPointerLock(); });
+$('pause').addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+if (isTouch) {
+  $('touch').classList.add('on');
+  const base = $('joyBase'), knob = $('joyKnob');
+  let joyId = null, lookId = null, jx = 0, jy = 0, lx = 0, ly = 0;
+  const btn = (id, down, up) => {
+    const el = $(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('act'); down(); }, { passive: false });
+    el.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('act'); up && up(); }, { passive: false });
+    el.addEventListener('touchcancel', () => { el.classList.remove('act'); up && up(); });
+  };
+  btn('tE', interact); btn('tF', toggleFlash); btn('tQ', eat);
+  btn('tR', () => touchRun = true, () => touchRun = false);
+  addEventListener('touchstart', e => {
+    if (!started) return;
+    for (const t of e.changedTouches) {
+      if (t.target.classList && t.target.classList.contains('tbtn')) continue;
+      if (t.clientX < innerWidth * 0.4 && joyId === null) {
+        joyId = t.identifier; jx = t.clientX; jy = t.clientY;
+        base.style.left = (jx - 60) + 'px'; base.style.top = (jy - 60) + 'px'; base.style.bottom = 'auto';
+      } else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+    }
+  }, { passive: false });
+  addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyId) {
+        let dx = t.clientX - jx, dy = t.clientY - jy; const l = Math.hypot(dx, dy);
+        if (l > 50) { dx *= 50 / l; dy *= 50 / l; }
+        knob.style.left = (35 + dx) + 'px'; knob.style.top = (35 + dy) + 'px';
+        touchMove.x = dx / 50; touchMove.y = dy / 50;
+      } else if (t.identifier === lookId) {
+        P.yaw -= (t.clientX - lx) * 0.006; P.pitch -= (t.clientY - ly) * 0.006; lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+  const end = e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyId) { joyId = null; touchMove.x = touchMove.y = 0; knob.style.left = knob.style.top = '35px'; }
+      if (t.identifier === lookId) lookId = null;
+    }
+  };
+  addEventListener('touchend', end); addEventListener('touchcancel', end);
+}
+
+/* ================= game state ================= */
+const P = { tx: 0, tz: 0, x: 3, z: 5, yaw: -0.6, pitch: 0, stamina: 1, breath: 1, sticks: 0, inTent: false, flash: false, bob: 0, stepT: 0, gasping: 0, moving: 0, sprint: false, roll: 0 };
+let started = false, dead = false, won = false;
+let time = 13.0, day = 1, nights = 0, nightStarted = false, fuel = 60;
+let outsideNightT = 0;
+const MAX_STICKS = 6;
+const M = { state: 'hidden', speed: 3, t: 0, tx: 0, tz: 0, sniffT: 0, sniffDur: 4.5, growlT: 0, stepT: 0, sniffSnd: 0,
+  twT: 0, twHold: 0, tw: new THREE.Vector3(), near: false, whisperT: 0, scratchT: 0, shake: 0 };
+const tentEvt = { timer: 10 };
+const G = { active: false, t: 0, cool: 4, seen: 0 };
+let scareT = 0;
+
+const isNight = () => time >= 20 || time < 5;
+function rate(t) {
+  if (t >= 6 && t < 18.5) return 12.5 / 110;
+  if (t >= 18.5 && t < 20) return 1.5 / 28;
+  if (t >= 20 || t < 5) return 9 / 85;
+  return 1 / 9;
+}
+function sunF(t) {
+  if (t >= 7 && t < 17.5) return 1;
+  if (t >= 17.5 && t < 20) return 1 - smooth01((t - 17.5) / 2.5);
+  if (t >= 5 && t < 7) return smooth01((t - 5) / 2);
+  return 0;
+}
+function duskF(t) { return Math.max(0, 1 - Math.abs(t - 18.7) / 1.4) + 0.7 * Math.max(0, 1 - Math.abs(t - 5.9) / 1.0); }
+
+let msgTimer = null;
+function msg(text, dur = 4) {
+  const el = $('msg'); el.innerHTML = text; el.style.opacity = 1;
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => el.style.opacity = 0, dur * 1000);
+}
+function toggleFlash() {
+  if (!started || dead) return;
+  P.flash = !P.flash; VM.flashT = 0.15; tone(1800, 0.03, 0.08, 'square');
+}
+
+/* ================= interactions ================= */
+const TENT_DOOR = { x: TENT.x, z: TENT.z + 2.2 };
+function nearestStick() {
+  let best = null, bd = 2.4;
+  for (const s of sticks) if (s.active) {
+    const d = Math.hypot(s.g.position.x - P.x, s.g.position.z - P.z);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function currentAction() {
+  if (P.inTent) return { label: '밖으로 나가기', fn: exitTent };
+  if (Math.hypot(P.x - TENT_DOOR.x, P.z - TENT_DOOR.z) < 1.9) return { label: '텐트에 들어가기', fn: enterTent };
+  return null;
+}
+function interact() { if (!started || dead || won) return; const a = currentAction(); if (a) a.fn(); }
+function pickStick(s) {
+  s.active = false; s.g.visible = false; P.sticks++; VM.pickT = 0.35;
+  noiseBurst(0.12, 900, 1, 0.25, 'bandpass'); noiseBurst(0.08, 1400, 1, 0.2, 'bandpass', 0.1);
+}
+function feedFire() {
+  fuel = Math.min(100, fuel + P.sticks * 15); P.sticks = 0; VM.pickT = 0.35; whoosh();
+  msg('불길이 커졌다.', 2);
+}
+function enterTent() {
+  P.inTent = true; P.tx = 0; P.tz = 0.6; P.yaw = 0; P.pitch = -0.05; zipper();
+  if (isNight()) msg('텐트 안이다. 여기서는 안전하다... 아마도.', 3);
+  else if (time >= 17.5) msg('텐트 안. 곧 밤이 된다.', 3);
+  if (M.state === 'chase') startTentApproach(false);
+}
+function exitTent() {
+  P.inTent = false; P.x = TENT_DOOR.x; P.z = TENT_DOOR.z + 0.4; P.yaw = Math.PI; zipper();
+  if (isNight()) {
+    msg('<span style="color:#ff6a6a">밤에 밖으로 나왔다...</span>', 2.5);
+    if (M.state !== 'hidden') { M.state = 'chase'; M.speed = 4.6; growl(0.6, 1.0); hidePrompt(); }
+  }
+}
+
+/* ================= monster logic ================= */
+const mp = monster.g.position;
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+let lightFlicker = 1; // < 1 while the monster is close: flashlight & lantern stutter
+function spawnChase() {
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  let x = P.x - fx * 30, z = P.z - fz * 30;
+  const r = Math.hypot(x, z); if (r > 135) { x *= 135 / r; z *= 135 / r; }
+  mp.set(x, H(x, z), z);
+  M.state = 'chase'; M.speed = 3.2 + nights * 0.3; M.growlT = 0; M.whisperT = 2;
+  stinger(); growl(0.5, 1.6);
+  msg('<span style="color:#ff5a5a">뒤에서... 무언가 온다. 텐트로 달려!</span>', 3);
+}
+function startTentApproach(spawnFar) {
+  if (spawnFar) {
+    const a = Math.random() * 6.28; const x = TENT.x + Math.cos(a) * 20, z = TENT.z + Math.sin(a) * 20;
+    mp.set(x, H(x, z), z);
+    msg('...밖에서 발소리가 들린다.', 3);
+  }
+  // 0 = the door side, so sometimes it stands right in the doorway, staring in
+  const sides = [0, 0, Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI * 0.75, -Math.PI * 0.75];
+  const a = sides[Math.floor(Math.random() * sides.length)];
+  M.tx = TENT.x + Math.sin(a) * 2.5; M.tz = TENT.z + Math.cos(a) * 2.5;
+  M.state = 'approach';
+}
+function hidePrompt() {}
+function moveTo(tx, tz, speed, dt) {
+  const dx = tx - mp.x, dz = tz - mp.z, d = Math.hypot(dx, dz);
+  if (d > 0.01) { const s = Math.min(d, speed * dt); mp.x += dx / d * s; mp.z += dz / d * s; }
+  mp.y = H(mp.x, mp.z);
+  monster.g.rotation.set(0, 0, 0);
+  monster.g.lookAt(tx, mp.y, tz);
+  return d;
+}
+// is the player looking at it? (head roughly in the centre of view)
+function playerSeesMonster(maxDist = 40) {
+  monster.head.getWorldPosition(_v1);
+  const d = _v1.distanceTo(camera.position);
+  _v1.sub(camera.position).normalize();
+  camera.getWorldDirection(_v2);
+  return d < maxDist && _v2.dot(_v1) > 0.86;
+}
+function animateMonster(dt, walking, speed, jawOpen = 0.12) {
+  M.t += dt * (walking ? speed * 1.25 : 1);
+  const s = Math.sin(M.t * 2.2);
+  const [L, R] = monster.legs, [AL, AR] = monster.arms;
+  L.hip.rotation.x = -0.4 + (walking ? s * 0.5 : 0);  L.knee.rotation.x = 0.85 + (walking ? Math.max(0, -s) * 0.8 : 0);
+  R.hip.rotation.x = -0.4 - (walking ? s * 0.5 : 0);  R.knee.rotation.x = 0.85 + (walking ? Math.max(0, s) * 0.8 : 0);
+  // arms hang forward from the hunch and drag along
+  AL.sh.rotation.set(-0.55 + (walking ? -s * 0.35 : Math.sin(M.t * 0.7) * 0.06), 0, -0.12);
+  AR.sh.rotation.set(-0.55 + (walking ? s * 0.35 : Math.sin(M.t * 0.6 + 1) * 0.06), 0, 0.12);
+  AL.elbow.rotation.x = -0.25 - (walking ? Math.max(0, s) * 0.3 : 0);
+  AR.elbow.rotation.x = -0.25 - (walking ? Math.max(0, -s) * 0.3 : 0);
+  monster.spine.rotation.set(0.5 + (walking ? Math.abs(s) * 0.06 : Math.sin(M.t * 0.8) * 0.03), 0, Math.sin(M.t * 1.1) * 0.07);
+  // unnatural head twitches: the head snaps to a new angle, holds, then snaps back
+  M.twT -= dt;
+  if (M.twT <= 0) {
+    if (M.twHold > 0) { M.twHold = 0; M.tw.set(0, 0, 0); M.twT = rand(0.4, 2.2) * (M.near ? 0.4 : 1); }
+    else { M.twHold = 1; M.tw.set(rand(-0.35, 0.35), rand(-0.6, 0.6), rand(-0.9, 0.9)); M.twT = rand(0.12, 0.45); if (M.near) crack(0.2); }
+  }
+  monster.head.rotation.set(-1.05 + M.tw.x, M.tw.y, M.tw.z + Math.sin(M.t * 0.9) * 0.12);
+  monster.jaw.rotation.x = jawOpen + Math.sin(M.t * 3.3) * 0.04;
+  monster.g.position.y += walking ? Math.abs(s) * 0.07 : 0;
+}
+
+function updateMonster(dt) {
+  lightFlicker = 1;
+  if (M.state === 'hidden') { monster.g.visible = false; if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z); return; }
+  monster.g.visible = true;
+  const dPlayer = Math.hypot(P.x - mp.x, P.z - mp.z);
+  M.near = dPlayer < 16 || M.state === 'sniff';
+  if (M.near && M.state !== 'watch') lightFlicker = Math.random() < 0.22 ? rand(0, 0.35) : 1;
+
+  if (M.state === 'watch') { // standing between the trees at dusk, just watching
+    mp.y = H(mp.x, mp.z); monster.g.rotation.set(0, 0, 0); monster.g.lookAt(P.x, mp.y, P.z);
+    animateMonster(dt, false, 0, 0.05);
+  } else if (M.state === 'chase') {
+    if (P.inTent) { startTentApproach(false); return; }
+    M.speed = Math.min(7.0, M.speed + dt * 0.13);
+    // it slows when watched... and rushes when you turn away
+    const seen = playerSeesMonster();
+    const sp = Math.min(7.6, M.speed * (seen ? 0.6 : 1.35));
+    moveTo(P.x, P.z, sp, dt);
+    animateMonster(dt, true, sp, seen ? 0.7 : 0.35);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 2.2 / sp; footstep(clamp(0.6 - dPlayer / 50, 0.03, 0.6), true); }
+    M.growlT -= dt; if (M.growlT <= 0) { M.growlT = rand(2.5, 4.5); growl(clamp(0.7 - dPlayer / 45, 0.05, 0.7), 1.1); }
+    M.whisperT -= dt; if (M.whisperT <= 0 && dPlayer < 18) { M.whisperT = rand(2.5, 4); whisper(); }
+    if (dPlayer < 1.5) jumpscare('밤에 텐트 밖에 있었다');
+  } else if (M.state === 'approach') {
+    const d = moveTo(M.tx, M.tz, 2.3, dt);
+    animateMonster(dt, true, 2.3);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 0.85; footstep(clamp(0.45 - d / 40, 0.04, 0.45), true); }
+    if (d < 0.1) {
+      M.state = 'sniff'; M.sniffT = 0; M.sniffDur = rand(5, 7) + nights * 0.8; M.sniffSnd = 0; M.scratchT = 1;
+      stinger(); growl(0.35, 1.4, 60);
+    }
+  } else if (M.state === 'sniff') {
+    M.sniffT += dt;
+    // crouch at the tent wall, press its face to the fabric, drag claws down it
+    mp.y = H(mp.x, mp.z) - 0.55;
+    monster.g.rotation.set(0, 0, 0); monster.g.lookAt(TENT.x, mp.y, TENT.z);
+    animateMonster(dt, false, 0, 0.25 + Math.max(0, Math.sin(M.sniffT * 1.3)) * 0.6);
+    monster.spine.rotation.x = 0.95;
+    monster.head.rotation.x = -1.35 + Math.sin(M.sniffT * 3) * 0.12;
+    monster.arms[1].sh.rotation.set(-1.5 - Math.sin(M.sniffT * 1.7) * 0.35, 0, 0.35);
+    monster.arms[1].elbow.rotation.x = -0.2;
+    monster.arms[0].sh.rotation.set(-1.25 + Math.sin(M.sniffT * 1.3) * 0.25, 0, -0.35);
+    M.sniffSnd -= dt; if (M.sniffSnd <= 0) { M.sniffSnd = rand(0.9, 1.4); breathSniff(0.28); }
+    M.scratchT -= dt; if (M.scratchT <= 0) { M.scratchT = rand(1.2, 2.2); scratch(); M.shake = 0.5; }
+    M.shake = Math.max(0, (M.shake || 0) - dt);
+    if (tentGroup) tentGroup.position.set(TENT.x + rand(-1, 1) * 0.025 * M.shake, 0, TENT.z + rand(-1, 1) * 0.025 * M.shake);
+    if (M.sniffT >= M.sniffDur) {
+      M.state = 'leave'; if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z);
+      const a = Math.random() * 6.28; M.tx = TENT.x + Math.cos(a) * 26; M.tz = TENT.z + Math.sin(a) * 26;
+      msg('...발소리가 멀어진다.', 3);
+      tentEvt.timer = rand(8, 14);
+    }
+  } else if (M.state === 'leave') {
+    const d = moveTo(M.tx, M.tz, 3, dt);
+    animateMonster(dt, true, 3);
+    M.stepT -= dt; if (M.stepT <= 0) { M.stepT = 0.8; footstep(clamp(0.3 - (26 - d) / 60, 0.02, 0.3), true); }
+    if (d < 0.5) M.state = 'hidden';
+  }
+}
+
+function updateTentEvents(dt) {
+  if (!isNight() || !P.inTent || M.state !== 'hidden') return;
+  tentEvt.timer -= dt;
+  if (tentEvt.timer <= 0) {
+    const chance = 0.45 + nights * 0.15;
+    if (Math.random() < chance) startTentApproach(true);
+    else tentEvt.timer = rand(7, 12);
+  }
+}
+
+// at dusk it shows itself far off between the trees, and vanishes once you stare at it
+function updateGlimpse(dt) {
+  const evening = time >= 18.6 && time < 20 && !P.inTent;
+  if (!G.active) {
+    if (evening && M.state === 'hidden') { G.cool -= dt; if (G.cool <= 0) {
+      const a = P.yaw + rand(-1.3, 1.3), d = rand(24, 36);
+      const x = P.x - Math.sin(a) * d, z = P.z - Math.cos(a) * d;
+      mp.set(x, H(x, z), z); M.state = 'watch';
+      G.active = true; G.t = 0; G.seen = 0;
+    } }
+    return;
+  }
+  G.t += dt;
+  if (playerSeesMonster(60)) { G.seen += dt; if (G.seen > 0.9) { M.state = 'hidden'; G.active = false; G.cool = rand(7, 11); whisper(); crack(0.3); } }
+  if (G.t > 9 || !evening) { if (M.state === 'watch') M.state = 'hidden'; G.active = false; G.cool = rand(5, 9); }
+}
+
+/* ================= jumpscare ================= */
+function eat() {
+  if (!started || dead || won) return;
+  if (!P.inTent) { msg('음식은 텐트 안에 있다.', 2); return; }
+  if (VM.eatT > 0) return;
+  if (food <= 0) { msg('음식이 다 떨어졌다...', 2.5); return; }
+  if (hunger > 92) { msg('아직 배고프지 않다.', 2); return; }
+  // take from the supply box first, then the items laid out on the floor
+  const type = food > FOOD_SHOWN ? BOX_TYPES[Math.floor(Math.random() * BOX_TYPES.length)] : foodMeshes[food - 1].userData.type;
+  food--;
+  foodMeshes.forEach((m, i) => { m.visible = i < food; });
+  foodBox.visible = food > FOOD_SHOWN;
+  hunger = Math.min(100, hunger + 30); hungerWarn = 0;
+  // lift it to your mouth
+  if (VM.eatMesh) leftHand.remove(VM.eatMesh);
+  const held = FOOD_TYPES[type].make();
+  held.scale.setScalar(1.1); held.position.set(0.01, 0.035, -0.05); held.rotation.set(0.7, 0.4, 0);
+  leftHand.add(held); VM.eatMesh = held; VM.eatT = 1.6;
+  eatSound(FOOD_TYPES[type].sound);
+  msg(`${FOOD_TYPES[type].name}을(를) 먹었다. (남은 음식 ${food}/${FOOD_MAX})`, 2.5);
+}
+function eatSound(kind) {
+  if (kind === 'can') { noiseBurst(0.05, 3000, 2, 0.3, 'bandpass'); noiseBurst(0.25, 1800, 1, 0.15, 'highpass', 0.06, 900); }
+  if (kind === 'can' || kind === 'crunch') for (let i = 0; i < 7; i++) noiseBurst(0.06, rand(1800, 3600), 1.5, 0.2, 'bandpass', 0.35 + i * 0.14);
+  if (kind === 'slurp') for (let i = 0; i < 3; i++) noiseBurst(0.35, 600, 2, 0.2, 'bandpass', 0.2 + i * 0.4, 2200);
+  if (kind === 'gulp') { tone(300, 0.05, 0.03, 'sine'); for (let i = 0; i < 4; i++) tone(180, 0.12, 0.18, 'sine', 90, 0.3 + i * 0.25); }
+}
+function updateHunger(dt) {
+  hunger = Math.max(0, hunger - dt * 0.55);
+  if (hunger < 30 && hungerWarn < 1) { hungerWarn = 1; msg(food > 0 ? '배가 고프다. 텐트에 가서 음식을 먹자.' : '배가 고프다... 음식이 없다.', 4); }
+  if (hunger < 10 && hungerWarn < 2) { hungerWarn = 2; msg('<span style="color:#ff6a6a">너무 배고파서 쓰러질 것 같다!</span>', 4); }
+  if (hunger <= 0) starve();
+}
+function starve() {
+  dead = true; vm.visible = false; $('touch').classList.remove('on');
+  if (document.exitPointerLock) document.exitPointerLock();
+  $('flash').style.transition = 'opacity 1.5s'; $('flash').style.background = '#000'; $('flash').style.opacity = 1;
+  setTimeout(() => {
+    $('over').querySelector('h1').textContent = '쓰러졌다';
+    $('overText').innerHTML = `굶주림으로 쓰러졌다.<br>${day}일차 · 버틴 밤 ${nights}/3`;
+    $('over').classList.remove('hidden');
+    if (AC) master.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4);
+  }, 1600);
+}
+function jumpscare(reason) {
+  if (dead) return; dead = true; scareT = 0;
+  $('touch').classList.remove('on'); vm.visible = false;
+  if (tentGroup) tentGroup.position.set(TENT.x, 0, TENT.z);
+  M.state = 'scare'; monster.g.visible = true;
+  P.pitch = 0; camera.rotation.set(0, P.yaw, 0); camera.updateMatrixWorld();
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  // pose: arms flung up, jaw unhinged, face level with yours
+  monster.g.rotation.set(0, 0, 0);
+  mp.set(camera.position.x + fx * 1.2, 0, camera.position.z + fz * 1.2);
+  monster.g.lookAt(camera.position.x, 0, camera.position.z);
+  monster.spine.rotation.set(0.35, 0, 0);
+  monster.head.rotation.set(-0.9, 0, 0);
+  monster.jaw.rotation.x = 0.95;
+  monster.arms[0].sh.rotation.set(-2.4, 0, -0.7); monster.arms[1].sh.rotation.set(-2.4, 0, 0.7);
+  monster.arms[0].elbow.rotation.x = -0.7; monster.arms[1].elbow.rotation.x = -0.7;
+  monster.g.updateMatrixWorld(true);
+  monster.head.getWorldPosition(_v3);
+  mp.x += camera.position.x + fx * 0.5 - _v3.x;
+  mp.y += camera.position.y - 0.03 - _v3.y;
+  mp.z += camera.position.z + fz * 0.5 - _v3.z;
+  camera.fov = 58; camera.updateProjectionMatrix();
+  screech(); crack(0.5);
+  $('flash').style.transition = 'none'; $('flash').style.opacity = 0.8;
+  requestAnimationFrame(() => { $('flash').style.transition = 'opacity .4s'; $('flash').style.opacity = 0; });
+  setTimeout(() => { drawFace(); $('face').classList.add('on'); }, 800);
+  setTimeout(() => {
+    $('face').classList.remove('on');
+    if (document.exitPointerLock) document.exitPointerLock();
+    $('overText').innerHTML = `${reason}.<br>${day}일차 밤 · 버틴 밤 ${nights}/3`;
+    $('over').classList.remove('hidden');
+    if (AC) master.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4);
+  }, 2200);
+}
+function drawFace() {
+  const c = $('face'), w = c.width = innerWidth, h = c.height = innerHeight, x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
+  const s = Math.min(w, h * 0.8), cx = w / 2, cy = h / 2;
+  const g = x.createRadialGradient(cx, cy - s * 0.05, s * 0.05, cx, cy, s * 0.6);
+  g.addColorStop(0, '#a49b8d'); g.addColorStop(0.6, '#4a443d'); g.addColorStop(1, '#0d0c0b');
+  x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, s * 0.34, s * 0.52, 0, 0, 6.29); x.fill();
+  x.strokeStyle = 'rgba(20,10,8,.7)'; x.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { x.beginPath(); let px = cx + rand(-s * .3, s * .3), py = cy + rand(-s * .45, s * .4); x.moveTo(px, py); for (let j = 0; j < 4; j++) { px += rand(-30, 30); py += rand(-30, 30); x.lineTo(px, py); } x.stroke(); }
+  for (const sx of [-1, 1]) {
+    x.fillStyle = '#000'; x.beginPath(); x.ellipse(cx + sx * s * 0.13, cy - s * 0.14, s * 0.09, s * 0.12, sx * 0.25, 0, 6.29); x.fill();
+    const eg = x.createRadialGradient(cx + sx * s * 0.13, cy - s * 0.13, 0, cx + sx * s * 0.13, cy - s * 0.13, s * 0.06);
+    eg.addColorStop(0, '#fff'); eg.addColorStop(0.2, '#ff3a20'); eg.addColorStop(1, 'rgba(255,0,0,0)');
+    x.fillStyle = eg; x.beginPath(); x.arc(cx + sx * s * 0.13, cy - s * 0.13, s * 0.06, 0, 6.29); x.fill();
+  }
+  const my = cy + s * 0.2, mw = s * 0.17, mh = s * 0.23;
+  x.fillStyle = '#080000'; x.beginPath(); x.ellipse(cx, my, mw, mh, 0, 0, 6.29); x.fill();
+  x.fillStyle = '#d8d0bc';
+  for (let i = 0; i < 9; i++) {
+    const tx = cx - mw * 0.85 + i * (mw * 1.7 / 8);
+    const k = Math.sqrt(Math.max(0, 1 - Math.pow((tx - cx) / mw, 2)));
+    const topY = my - mh * k, botY = my + mh * k;
+    x.beginPath(); x.moveTo(tx - 9, topY + 2); x.lineTo(tx + 9, topY + 2); x.lineTo(tx, topY + rand(30, 60)); x.fill();
+    x.beginPath(); x.moveTo(tx - 9, botY - 2); x.lineTo(tx + 9, botY - 2); x.lineTo(tx, botY - rand(25, 50)); x.fill();
+  }
+  const rv = x.createRadialGradient(cx, cy, s * 0.3, cx, cy, Math.max(w, h) * 0.7);
+  rv.addColorStop(0, 'rgba(0,0,0,0)'); rv.addColorStop(1, 'rgba(120,0,0,.8)');
+  x.fillStyle = rv; x.fillRect(0, 0, w, h);
+}
+
+/* ================= time ================= */
+function updateTime(dt) {
+  const prev = time;
+  time += dt * rate(time);
+  if (time >= 24) { time -= 24; day++; }
+  if (prev < 17.5 && time >= 17.5) msg('그림자가 길어진다. 슬슬 캠프로 돌아가자.', 4);
+  if (prev < 18.6 && time >= 18.6) msg('해가 지고 있다... 밤이 되기 전에 텐트로 돌아가야 한다.', 4.5);
+  if (prev < 19.4 && time >= 19.4) { msg('숲 깊은 곳에서 무언가가 울부짖었다.', 4); growl(0.15, 2.5, 55); }
+  if (prev < 20 && time >= 20) {
+    nightStarted = true; tentEvt.timer = rand(6, 11);
+    if (P.inTent) msg('밤이 됐다. 텐트 안에 있으면 안전하다. 밖으로 나가지 마라.', 4);
+    else msg('<span style="color:#ff6a6a">밤이다. 당장 텐트로 들어가!</span>', 4);
+  }
+  if (prev < 5 && time >= 5 && nightStarted) {
+    nightStarted = false; nights++;
+    if (M.state !== 'hidden') { M.state = 'hidden'; hidePrompt(); }
+    if (nights >= 3) { win(); return; }
+    msg(`${nights}번째 밤을 버텼다. 동이 튼다...`, 5);
+  }
+}
+function win() {
+  won = true; hidePrompt();
+  if (document.exitPointerLock) document.exitPointerLock();
+  setTimeout(() => $('win').classList.remove('hidden'), 1500);
+  msg('해가 떠오른다...', 3);
+}
+
+/* ================= player ================= */
+const TENT_HALF = 0.72; // how far you can crawl from the tent centre (walls slope in)
+function updatePlayer(dt) {
+  P.pitch = clamp(P.pitch, -1.35, 1.35);
+
+  let f = 0, s = 0;
+  if (keys.KeyW || keys.ArrowUp) f += 1;
+  if (keys.KeyS || keys.ArrowDown) f -= 1;
+  if (keys.KeyD || keys.ArrowRight) s += 1;
+  if (keys.KeyA || keys.ArrowLeft) s -= 1;
+  f -= touchMove.y; s += touchMove.x;
+  const len = Math.hypot(f, s); if (len > 1) { f /= len; s /= len; }
+  const moving = len > 0.1;
+  if (P.inTent) { // crouched, slow movement inside the tent
+    const tfx = -Math.sin(P.yaw), tfz = -Math.cos(P.yaw), trx = Math.cos(P.yaw), trz = -Math.sin(P.yaw);
+    P.tx = clamp(P.tx + (tfx * f + trx * s) * 1.3 * dt, -TENT_HALF, TENT_HALF);
+    P.tz = clamp(P.tz + (tfz * f + trz * s) * 1.3 * dt, -TENT_HALF, TENT_HALF);
+    P.sprint = false; P.stamina = Math.min(1, P.stamina + dt * 0.25);
+    P.moving = lerp(P.moving, moving ? 0.5 : 0, dt * 8);
+    if (moving) { P.bob += dt * 4; P.stepT -= dt; if (P.stepT <= 0) { P.stepT = 0.6; noiseBurst(0.12, 1200, 0.8, 0.05, 'bandpass'); } }
+    P.roll = lerp(P.roll, -s * 0.02, dt * 6);
+    camera.position.set(TENT.x + P.tx, 0.95 + Math.sin(P.bob) * 0.02 * P.moving, TENT.z + P.tz);
+    camera.rotation.set(P.pitch, P.yaw, P.roll);
+    return;
+  }
+  const sprint = (keys.ShiftLeft || keys.ShiftRight || touchRun) && moving && P.stamina > 0.02 && f > 0;
+  P.sprint = sprint;
+  if (sprint) P.stamina = Math.max(0, P.stamina - dt / 4.5); else P.stamina = Math.min(1, P.stamina + dt / 7);
+  const speed = sprint ? 7 : 3.8;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+  P.x += (fx * f + rx * s) * speed * dt; P.z += (fz * f + rz * s) * speed * dt;
+  for (const o of obstacles) {
+    const dx = P.x - o.x, dz = P.z - o.z, d = Math.hypot(dx, dz), m = o.r + 0.35;
+    if (d < m && d > 0.0001) { P.x = o.x + dx / d * m; P.z = o.z + dz / d * m; }
+  }
+  const r = Math.hypot(P.x, P.z);
+  if (r > 140) { P.x *= 140 / r; P.z *= 140 / r; if (Math.random() < 0.02) msg('숲이 너무 깊다. 더는 갈 수 없다.', 2); }
+  P.moving = lerp(P.moving, moving ? (sprint ? 1.6 : 1) : 0, dt * 8);
+  if (moving) {
+    P.bob += dt * speed * 2.1;
+    P.stepT -= dt; if (P.stepT <= 0) { P.stepT = sprint ? 0.32 : 0.5; footstep(sprint ? 0.16 : 0.09, false); }
+  }
+  P.roll = lerp(P.roll, -s * 0.025, dt * 6);
+  const bobY = Math.sin(P.bob) * 0.05 * P.moving, bobX = Math.cos(P.bob * 0.5) * 0.03 * P.moving;
+  camera.position.set(P.x + rx * bobX, H(P.x, P.z) + 1.65 + bobY, P.z + rz * bobX);
+  camera.rotation.set(P.pitch, P.yaw, P.roll);
+}
+
+function updateViewModel(dt) {
+  // lag-sway from looking around
+  const dy = P.yaw - VM.lastYaw, dp = P.pitch - VM.lastPitch;
+  VM.lastYaw = P.yaw; VM.lastPitch = P.pitch;
+  VM.swayX = lerp(VM.swayX, clamp(dy * 1.2, -0.08, 0.08), dt * 10);
+  VM.swayY = lerp(VM.swayY, clamp(-dp * 1.2, -0.08, 0.08), dt * 10);
+  const bx = Math.cos(P.bob * 0.5) * 0.018 * P.moving, by = Math.abs(Math.sin(P.bob * 0.5)) * 0.022 * P.moving;
+  const breathe = Math.sin(gameT * 1.6) * 0.004;
+  VM.flashT = Math.max(0, VM.flashT - dt); VM.pickT = Math.max(0, VM.pickT - dt);
+  const sprintTilt = P.sprint ? 1 : 0;
+  rightHand.position.set(RH_BASE.x + VM.swayX + bx, RH_BASE.y + VM.swayY - by + breathe - sprintTilt * 0.05 - VM.flashT * 0.15, RH_BASE.z + VM.flashT * 0.1);
+  rightHand.rotation.set(0.06 + sprintTilt * 0.3 + VM.swayY, 0.05 + VM.swayX * 2, sprintTilt * -0.2);
+  // left hand: only shown while holding sticks
+  let target = LH_HIDE;
+  if (VM.eatT > 0) target = LH_MOUTH;
+  else if (P.sticks > 0 || VM.pickT > 0) target = LH_BASE;
+  VM.eatT = Math.max(0, VM.eatT - dt);
+  if (VM.eatT <= 0 && VM.eatMesh) { leftHand.remove(VM.eatMesh); VM.eatMesh = null; }
+  leftHand.position.lerp(target, dt * 9);
+  leftHand.position.x += VM.swayX - bx; leftHand.position.y += VM.swayY * 0.5;
+  const toMouth = target === LH_MOUTH;
+  leftHand.rotation.set(toMouth ? 0.45 : 0.1 - VM.pickT * 1.2, toMouth ? 0.35 : -0.1, toMouth ? 0.35 : 0.1);
+  bundle.visible = P.sticks > 0 && !toMouth;
+  bundle.children.forEach((c, i) => { c.visible = i < P.sticks; });
+  // flashlight
+  flashModel.userData.lens.emissiveIntensity = P.flash ? 3 : 0;
+}
+
+/* ================= environment ================= */
+const cTop = { day: C(0x3d6eb0), dusk: C(0x2b2a55), night: C(0x020410) };
+const cHor = { day: C(0xb3cbe0), dusk: C(0xe07a40), night: C(0x0b0f1c) };
+const cTmp = new THREE.Color(), cTmp2 = new THREE.Color();
+const sunDay = C(0xfff2df), sunDusk = C(0xff9050), moonCol = C(0x8aa2e0);
+let fireCrackT = 0, ambT = 2, hbT = 0, gameT = 0;
+function updateEnv(dt) {
+  const s = sunF(time), dk = Math.min(1, duskF(time));
+  const center = camera.position;
+  // sky
+  skyU.top.value.copy(cTop.night).lerp(cTop.day, s).lerp(cTop.dusk, dk * 0.5);
+  skyU.horizon.value.copy(cHor.night).lerp(cHor.day, s).lerp(cHor.dusk, dk * 0.7 * (0.25 + s));
+  skyU.bottom.value.copy(skyU.horizon.value).multiplyScalar(0.3);
+  sky.position.copy(center);
+  scene.fog.color.copy(skyU.horizon.value).multiplyScalar(isNight() ? 0.6 : 0.85);
+  scene.fog.density = 0.01 + (1 - s) * 0.028;
+  // sun / moon light (single shadow caster)
+  let dir;
+  if (s > 0.12) {
+    const tt = clamp((time - 5.5) / 14, 0, 1), ang = tt * Math.PI;
+    dir = _v1.set(Math.cos(ang) * 0.85, Math.max(0.12, Math.sin(ang)), 0.4).normalize();
+    sky1.intensity = s * 2.4;
+    sky1.color.copy(sunDay).lerp(sunDusk, dk);
+  } else {
+    dir = _v1.copy(moonDir);
+    sky1.intensity = 0.32 * (1 - s);
+    sky1.color.copy(moonCol);
+  }
+  sky1.position.copy(center).addScaledVector(dir, 110);
+  sky1.target.position.copy(center);
+  hemi.intensity = 0.06 + s * 0.6;
+  hemi.color.copy(cTmp.set(0xbfd6ff)).lerp(cTmp2.set(0xffb080), dk * 0.5);
+  moonGroup.position.copy(center).addScaledVector(moonDir, 380);
+  moonGroup.visible = s < 0.85;
+  stars.position.copy(center);
+  stars.material.opacity = clamp(1 - s * 1.6, 0, 1) * (0.8 + Math.sin(gameT * 3) * 0.1); stars.visible = s < 0.7;
+  flash.intensity = P.flash ? 3.2 * lightFlicker : 0;
+  beam.material.opacity = P.flash ? 0.008 + (1 - s) * 0.018 : 0;
+  lantern.intensity = P.inTent ? 1.4 * (0.4 + 0.6 * lightFlicker) : 0;
+  tentMat.opacity = P.inTent ? (M.state === 'sniff' ? 0.68 : 0.8) : 0.97;
+  grassUniforms.uTime.value = gameT;
+
+  // fire
+  fuel = 100; // the campfire never goes out
+  const ff = fuel / 100, flick = 0.85 + Math.sin(gameT * 13) * 0.07 + Math.sin(gameT * 31) * 0.05 + Math.random() * 0.06;
+  fireLight.intensity = (fuel > 0 ? 0.6 + ff * 4.5 : 0) * flick;
+  fireLight.distance = 10 + ff * 24;
+  fireLight.position.set(Math.sin(gameT * 7) * 0.05, 1.0 + Math.sin(gameT * 11) * 0.05, Math.cos(gameT * 9) * 0.05);
+  emberMat.emissiveIntensity = fuel > 0 ? 0.2 + ff * 0.7 * flick : 0.06;
+  for (const fl of flames) {
+    const u = fl.userData, k = fuel > 0 ? 0.25 + ff * 0.9 : 0;
+    const sc = u.base * k * (0.8 + Math.sin(gameT * 9 + u.ph) * 0.2);
+    fl.scale.set(sc * 0.75, sc * 1.4, 1);
+    fl.position.set(u.ox + Math.sin(gameT * 5 + u.ph) * 0.04, 0.3 + sc * 0.45, u.oz);
+    fl.visible = k > 0;
+  }
+  for (const sm of smokes) {
+    const u = sm.userData; u.life += dt * 0.12; if (u.life > 1) { u.life = 0; u.ox = rand(-0.2, 0.2); }
+    const l = u.life; sm.position.set(u.ox + Math.sin(l * 4 + gameT * 0.5) * 0.4 * l, 1.2 + l * 5, Math.cos(l * 3) * 0.3 * l);
+    const sc = 0.8 + l * 3; sm.scale.set(sc, sc, 1);
+    sm.material.opacity = Math.sin(l * Math.PI) * (0.08 + s * 0.14) * (0.3 + ff);
+    sm.material.color.setRGB(0.05 + s * 0.35 + ff * 0.05 * (1 - l), 0.045 + s * 0.33, 0.04 + s * 0.32);
+  }
+  for (let i = 0; i < embers.n; i++) {
+    const sd = embers.seeds[i];
+    embers.life[i] += dt * 0.45 * sd[2]; if (embers.life[i] > 1) { embers.life[i] = 0; sd[0] = rand(-0.3, 0.3); sd[1] = rand(-0.3, 0.3); }
+    const l = embers.life[i];
+    embers.pos[i * 3] = sd[0] + Math.sin(l * 9 + i) * 0.2 * l; embers.pos[i * 3 + 1] = 0.3 + l * (1 + ff * 3); embers.pos[i * 3 + 2] = sd[1] + Math.cos(l * 7 + i) * 0.2 * l;
+  }
+  embers.pts.geometry.attributes.position.needsUpdate = true;
+  embers.pts.visible = fuel > 3;
+  // fireflies (evening to dawn)
+  const ffOn = clamp(1 - s * 1.8, 0, 1);
+  fireflies.pts.visible = ffOn > 0.02;
+  if (fireflies.pts.visible) {
+    for (let i = 0; i < fireflies.n; i++) {
+      const sd = fireflies.seeds[i], t = gameT * 0.3 + sd[3];
+      const x = sd[0] + Math.sin(t * 1.3) * 2.5, z = sd[1] + Math.cos(t * 1.1) * 2.5;
+      fireflies.pos[i * 3] = x; fireflies.pos[i * 3 + 1] = H(x, z) + sd[2] + Math.sin(t * 2.3) * 0.4; fireflies.pos[i * 3 + 2] = z;
+    }
+    fireflies.pts.geometry.attributes.position.needsUpdate = true;
+    fireflies.pts.material.opacity = ffOn * (0.6 + Math.sin(gameT * 4) * 0.3);
+  }
+  // mist
+  const mistA = 0.04 + (1 - s) * 0.07;
+  for (const mi of mists) {
+    const u = mi.userData; u.x += Math.sin(gameT * 0.05 + u.ph) * u.sp * dt; u.z += Math.cos(gameT * 0.04 + u.ph) * u.sp * dt;
+    mi.position.set(u.x, H(u.x, u.z) + 0.9, u.z);
+    mi.material.opacity = mistA; mi.material.color.copy(skyU.horizon.value).lerp(cTmp.set(0x8090a8), 0.5);
+  }
+}
+function updateAudio(dt) {
+  if (!AC) return;
+  const s = sunF(time), night = 1 - s;
+  windGain.gain.setTargetAtTime((0.05 + night * 0.1 + Math.sin(gameT * 0.3) * 0.03) * (P.inTent ? 0.6 : 1), AC.currentTime, 0.5);
+  windFilt.frequency.setTargetAtTime(300 + Math.sin(gameT * 0.21) * 120, AC.currentTime, 0.5);
+  const dFire = P.inTent ? 6 : Math.hypot(P.x, P.z);
+  const fv = (fuel / 100) * clamp(1 - dFire / 22, 0, 1);
+  fireGain.gain.setTargetAtTime(fv * 0.12, AC.currentTime, 0.2);
+  fireCrackT -= dt;
+  if (fireCrackT <= 0) { fireCrackT = rand(0.05, 0.3); if (fv > 0.02) noiseBurst(0.03, rand(1500, 4000), 2, fv * 0.5, 'bandpass'); }
+  ambT -= dt;
+  if (ambT <= 0) {
+    if (s > 0.5) { ambT = rand(3, 8); const b = rand(2400, 3400); for (let i = 0; i < 3; i++) tone(b, 0.07, 0.04, 'sine', b * 1.3, i * 0.12); }
+    else if (M.state === 'hidden') { ambT = rand(0.4, 1.4); for (let i = 0; i < 3; i++) tone(4300, 0.025, 0.018, 'square', null, i * 0.05); }
+    else ambT = 1;
+  }
+  let hbRate = 0;
+  if (M.state === 'chase') hbRate = 0.32 + clamp(Math.hypot(P.x - mp.x, P.z - mp.z) / 40, 0, 1) * 0.6;
+  else if (M.state === 'sniff') hbRate = 0.38;
+  else if (M.state === 'approach') hbRate = 0.6;
+  else if (isNight() && !P.inTent) hbRate = 0.8;
+  if (hbRate) { hbT -= dt; if (hbT <= 0) { hbT = hbRate; heartbeat(0.35); } }
+}
+function updateDanger() {
+  let d = 0;
+  if (M.state === 'chase') d = clamp(1 - Math.hypot(P.x - mp.x, P.z - mp.z) / 25, 0, 1) * 0.8 + 0.15;
+  else if (M.state === 'sniff') d = 0.45 + Math.sin(gameT * 8) * 0.08;
+  else if (M.state === 'approach') d = 0.2;
+  if (dead) d = 1;
+  $('danger').style.opacity = d;
+  if (finalPass) { finalPass.uniforms.uCA.value = 0.004 + d * 0.035; finalPass.uniforms.uTime.value = gameT; }
+}
+function fmtTime(t) { const h = Math.floor(t), m = Math.floor((t - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
+let hudT = 0;
+function updateHUD(dt) {
+  hudT -= dt; if (hudT > 0) return; hudT = 0.1;
+  $('clock').textContent = `${day}일차 · ${fmtTime(time)}`;
+  $('phase').textContent = isNight() ? '밤 — 텐트 안에 있을 것' : time >= 17.5 ? '해질녘' : time < 7 ? '새벽' : '낮';
+  $('phase').style.color = isNight() ? '#ff7a7a' : time >= 17.5 ? '#ffb27a' : '';
+  $('staBar').style.width = (P.stamina * 100) + '%';
+  $('hgBar').style.width = hunger + '%';
+  $('hgBar').style.background = hunger > 30 ? '#e0b44a' : '#d9534f';
+  $('tQ').classList.toggle('show', P.inTent && !dead);
+  $('info').innerHTML = `🥫 텐트 음식 ${food}/${FOOD_MAX}<br>🌙 버틴 밤 ${nights}/3<br>🔦 손전등 ${P.flash ? '켜짐' : '꺼짐'}`;
+  const a = (dead || won) ? null : currentAction();
+  const h = $('hint');
+  if (a) { h.textContent = `${isTouch ? '[행동]' : '[E]'} ${a.label}` + (P.inTent ? `  ·  ${isTouch ? '[먹기]' : '[Q]'} 음식 먹기 (${food}/${FOOD_MAX})` : ''); h.style.opacity = 1; } else h.style.opacity = 0;
+}
+
+/* ================= main loop ================= */
+const clock = new THREE.Clock();
+function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, clock.getDelta());
+  const paused = started && !isTouch && !locked && !dead && !won && !DEBUG;
+  if (started && !paused) {
+    gameT += dt;
+    if (!dead && !won) {
+      updateTime(dt);
+      updatePlayer(dt);
+      if (!dead) {
+        if (isNight() && !P.inTent) { outsideNightT += dt; if (M.state === 'hidden' && outsideNightT > 4) spawnChase(); }
+        else outsideNightT = 0;
+        updateHunger(dt); if (dead) return render();
+        updateMonster(dt); updateTentEvents(dt); updateGlimpse(dt); updateAudio(dt); updateViewModel(dt);
+      }
+    } else if (dead) {
+      scareT += dt;
+      camera.rotation.set(rand(-0.03, 0.03), P.yaw + rand(-0.03, 0.03), rand(-0.05, 0.05));
+      monster.head.rotation.z = Math.sin(scareT * 40) * 0.3;
+      monster.jaw.rotation.x = 0.85 + Math.sin(scareT * 55) * 0.12;
+    }
+    updateEnv(dt); updateDanger(); updateHUD(dt);
+  } else if (!started) {
+    gameT += dt;
+    vm.visible = false;
+    camera.position.set(Math.sin(gameT * 0.05) * 6, 2.0, 7 + Math.cos(gameT * 0.05) * 2);
+    camera.lookAt(0, 1, -4); updateEnv(dt * 0);
+  }
+  render();
+}
+time = 21.5; fuel = 70;
+frame();
+
+$('startBtn').addEventListener('click', () => {
+  $('intro').classList.add('hidden');
+  time = 13.0; fuel = 60;
+  initAudio();
+  started = true; clock.getDelta(); vm.visible = true;
+  camera.rotation.set(0, 0, 0); VM.lastYaw = P.yaw;
+  if (!isTouch) renderer.domElement.requestPointerLock();
+  msg('캠핑장에 도착했다. 밤 8시 전에는 반드시 <b>텐트</b>로 돌아와야 한다.', 6);
+});
+
+if (DEBUG) window.__dbg = { P, M, monster, enterTent, eat, get hunger() { return hunger; }, set hunger(v) { hunger = v; }, get food() { return food; }, get fuel() { return fuel; }, set fuel(v) { fuel = v; } };
+const qt = parseFloat(new URLSearchParams(location.search).get('t'));
+if (!isNaN(qt)) $('startBtn').addEventListener('click', () => { time = qt; });
+})();
+</script>
+</body>
+</html>
