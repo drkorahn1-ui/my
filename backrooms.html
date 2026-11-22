@@ -513,16 +513,27 @@ function update(dt) {
   if (Math.floor(elapsed) === 20 && msgT <= 0 && !flashMsg.d1) { flashMsg.d1 = 1; flashMsg('초록색 EXIT 표지판을 찾아라'); }
 
   // entity
-  if (!ent.active && elapsed > 40) {
-    const a = player.yaw + (Math.random() - 0.5) * 1.2; // behind the player
-    ent.x = player.x + Math.sin(a) * 34; ent.z = player.z + Math.cos(a) * 34;
-    ent.active = true; entity.visible = true; flashMsg('무언가 걷는 소리가 들린다');
+  if (!ent.active && elapsed > 25) {
+    // appear in front of the player, in plain view, and stare before chasing
+    // pick the direction near the view centre with the longest clear sight line
+    let best = { a: player.yaw, d: 3 };
+    for (const off of [0, 0.15, -0.15, 0.3, -0.3, 0.45, -0.45]) {
+      const a = player.yaw + off; let d = 0;
+      for (let s = 1; s <= 14; s += 0.25) {
+        const q = { x: player.x - Math.sin(a) * s, z: player.z - Math.cos(a) * s }, ox = q.x, oz = q.z;
+        collide(q, 0.35); if (q.x !== ox || q.z !== oz) break; d = s;
+      }
+      if (d > best.d + 1) best = { a, d };
+    }
+    const sd = Math.max(3, best.d - 0.5);
+    ent.x = player.x - Math.sin(best.a) * sd; ent.z = player.z - Math.cos(best.a) * sd;
+    ent.active = true; ent.stare = 3; entity.visible = true; flashMsg('저기… 뭔가 서 있다');
   }
   if (ent.active) {
-    ent.speed = Math.min(4.4, 2.4 + elapsed / 140);
+    ent.speed = Math.min(4.8, 3.3 + elapsed / 200);
     const dx = player.x - ent.x, dz = player.z - ent.z, d = Math.hypot(dx, dz);
-    // too far away: drag it back in
-    const sp = d > 45 ? ent.speed * 3 : ent.speed;
+    let sp = d > 24 ? ent.speed * 2.2 : ent.speed; // never lets you get far away
+    if (ent.stare > 0) { ent.stare -= dt; sp = 0; if (ent.stare <= 0) flashMsg('도망쳐! (SHIFT)'); }
     ent.x += dx / d * sp * dt; ent.z += dz / d * sp * dt;
     entity.position.set(ent.x, 0, ent.z); entity.rotation.y = Math.atan2(dx, dz);
     if (d < 0.8) { redEl.style.opacity = 0.7; gameOver(false); return; }
